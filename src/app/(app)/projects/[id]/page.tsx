@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
 import { getProject, projectFinancials, projectDocuments } from "@/lib/projects";
+import { listInventoryInstances, listReservationsForProject } from "@/lib/inventory-instances";
 import { PageHeader, PrimaryLink, StatCard, Money, StatusPill, EmptyState, Th, Td, TableCard } from "@/components/ui";
 import { ProjectStatusControl } from "./ProjectStatusControl";
+import { ReserveInventoryPanel } from "./ReserveInventoryPanel";
 import type { ProjectStatus } from "@/lib/project-status";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +25,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const project = await getProject(projectId);
   if (!project) notFound();
 
-  const [financials, docs] = await Promise.all([
+  const [financials, docs, inventoryOptions, itemReservations] = await Promise.all([
     projectFinancials(projectId),
     projectDocuments(projectId),
+    listInventoryInstances(),
+    listReservationsForProject(projectId),
   ]);
 
   return (
@@ -85,10 +89,25 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </div>
 
           <div>
-            <div className="text-[13px] font-semibold mb-2">Inventory &amp; damage reports</div>
+            <div className="text-[13px] font-semibold mb-2">Inventory reservations</div>
+            {inventoryOptions.length === 0 ? (
+              <EmptyState
+                title="No tracked inventory yet"
+                body="Register durable gear (chairs, tents, AV) under Event Inventory first — then reserve it here against this project's dates."
+                action={<PrimaryLink href="/projects/inventory/new">+ New inventory item</PrimaryLink>}
+              />
+            ) : (
+              <ReserveInventoryPanel
+                projectId={project.id}
+                eventDate={project.eventDate}
+                inventoryOptions={inventoryOptions}
+                reservations={itemReservations}
+              />
+            )}
+            <div className="text-[13px] font-semibold mt-6 mb-2">Damage reports</div>
             <EmptyState
               title="Coming next"
-              body="Instance-level inventory reservations, dispatch checklists, and photo-verified damage reports land in the next build phase — this project record is already the hub they'll hang off."
+              body="Photo-verified damage reporting lands in the next build phase — this project record is already the hub it'll hang off."
             />
           </div>
         </div>

@@ -23,6 +23,7 @@ const groups: {
     label: "Projects",
     items: [
       { href: "/projects", label: "Projects", icon: "🎪", perm: "projects" },
+      { href: "/projects/inventory", label: "Event Inventory", icon: "🪑", perm: "projects" },
     ],
   },
   {
