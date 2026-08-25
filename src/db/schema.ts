@@ -399,6 +399,9 @@ export const documents = pgTable("documents", {
   creditedCents: money("credited_cents").notNull().default(0),
   sourceDocId: integer("source_doc_id"), // quote → invoice lineage
   journalEntryId: integer("journal_entry_id"),
+  /** Events vertical: set when this quote/invoice belongs to a project's
+   *  milestone payment schedule. Null for every ordinary SME document. */
+  projectId: integer("project_id"),
   // eTIMS fields (populated on invoice issue by the TaxDevice)
   cuInvoiceNumber: text("cu_invoice_number"),
   cuSerial: text("cu_serial"),
@@ -429,6 +432,7 @@ export const documents = pgTable("documents", {
 }, (t) => ({
   orgTypeStatusIdx: index("idx_documents_org").on(t.orgId, t.type, t.status),
   contactIdx: index("idx_documents_contact").on(t.contactId),
+  projectIdx: index("idx_documents_project").on(t.projectId),
 }));
 
 export const documentLines = pgTable("document_lines", {
@@ -1300,4 +1304,141 @@ export const ledgerIntegrityFindings = pgTable("ledger_integrity_findings", {
 }, (t) => ({
   orgCheckUnique: uniqueIndex("idx_ledger_integrity_org_check").on(t.orgId, t.checkKey),
   unresolvedIdx: index("idx_ledger_integrity_unresolved").on(t.resolvedAt),
+}));
+
+/**
+ * ---------------------------------------------------------------------
+ * Events vertical (Zeno Events) — projects, instance-tracked inventory,
+ * milestone billing, and photo-verified damage reporting. Additive only:
+ * nothing above this line is touched. See docs/ZENO_EVENTS.md-equivalent
+ * proposal for the full picture; this is the Phase 0/1 schema slice.
+ * ---------------------------------------------------------------------
+ */
+
+/** One row per event — the hub every other events-module table hangs off. */
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  contactId: integer("contact_id"), // the client
+  name: text("name").notNull(),
+  eventType: text("event_type"), // wedding | corporate | gala | other — free text, not enforced
+  venue: text("venue"),
+  eventDate: text("event_date").notNull(),
+  status: text("status").notNull().default("lead"), // lead | quoted | confirmed | in_progress | completed | cancelled
+  budgetCents: money("budget_cents").notNull().default(0),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgStatusIdx: index("idx_projects_org").on(t.orgId, t.status),
+  contactIdx: index("idx_projects_contact").on(t.contactId),
+  eventDateIdx: index("idx_projects_event_date").on(t.orgId, t.eventDate),
+}));
+
+/** Instance- or batch-level record for durable, rentable gear (chairs,
+ *  tents, AV) — distinct from the FIFO consumable stock in stockLots.
+ *  itemId points at the catalog item (e.g. "Chiavari Chair"); this row is
+ *  one trackable unit or labeled batch of it, with its own location and
+ *  lifecycle state. */
+export const inventoryItems = pgTable("inventory_items", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  itemId: integer("item_id").notNull(),
+  label: text("label").notNull(), // e.g. "Set B" or a serial number
+  qty: doublePrecision("qty").notNull().default(1), // batch size — 1 for a serialized unit, >1 for a labeled batch
+  condition: text("condition").notNull().default("good"), // good | worn | damaged | written_off
+  status: text("status").notNull().default("in_store"), // in_store | reserved | dispatched | at_event | returned | damaged | on_external_hire
+  warehouseId: integer("warehouse_id"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgItemIdx: index("idx_inventory_items_org_item").on(t.orgId, t.itemId),
+  statusIdx: index("idx_inventory_items_status").on(t.orgId, t.status),
+}));
+
+/** Ties an inventory item to a project across a date range — this is the
+ *  conflict-check surface: two reservations for the same item with
+ *  overlapping ranges is the "chairs double-booked" problem made queryable. */
+export const reservations = pgTable("reservations", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItems.id),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  qty: doublePrecision("qty").notNull().default(1), // portion of a batch this project holds
+  startDate: text("start_date").notNull(), // dispatch date
+  endDate: text("end_date").notNull(), // expected return date
+  status: text("status").notNull().default("booked"), // booked | dispatched | returned | cancelled
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  itemDatesIdx: index("idx_reservations_item_dates").on(t.inventoryItemId, t.startDate, t.endDate),
+  projectIdx: index("idx_reservations_project").on(t.projectId),
+}));
+
+/** Milestone template set at project confirmation. Generates real invoices
+ *  (documents rows, type='invoice', projectId set) as each milestone comes
+ *  due — reuses the existing invoice engine rather than a parallel one. */
+export const paymentSchedule = pgTable("payment_schedule", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  milestoneName: text("milestone_name").notNull(), // "Booking Deposit", "Final Balance"...
+  triggerType: text("trigger_type").notNull(), // fixed_date | days_before_event | on_confirmation
+  triggerValue: text("trigger_value"), // ISO date for fixed_date, integer-as-text for days_before_event
+  amountType: text("amount_type").notNull(), // percentage | fixed
+  percentageValue: doublePrecision("percentage_value"), // set when amountType = 'percentage', e.g. 30 for 30%
+  fixedAmountCents: money("fixed_amount_cents"), // set when amountType = 'fixed'
+  sequenceOrder: integer("sequence_order").notNull().default(0),
+  documentId: integer("document_id"), // set once the milestone's invoice has been generated
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  projectIdx: index("idx_payment_schedule_project").on(t.projectId),
+}));
+
+/** Photo-backed liability record, one per damaged/missing unit. No row can
+ *  represent a "Damaged" status without a photoUrl — enforced in the UI/
+ *  action layer (camera-only capture), not the DB, same as other required-
+ *  attachment flows in this codebase. */
+export const damageReports = pgTable("damage_reports", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItems.id),
+  projectId: integer("project_id"), // null for a hire-out return not tied to an internal project
+  reservationId: integer("reservation_id"),
+  reportedByMemberId: integer("reported_by_member_id"),
+  damageType: text("damage_type").notNull(), // broken | chipped | stained | missing | other
+  description: text("description"),
+  photoUrl: text("photo_url").notNull(),
+  stageReported: text("stage_reported").notNull(), // loading | collection | inspection
+  liabilityStatus: text("liability_status").notNull().default("pending"), // pending | staff_fault | client_fault | wear_and_tear | unresolved
+  resolvedByMemberId: integer("resolved_by_member_id"),
+  resolvedAt: text("resolved_at"),
+  billedToClient: boolean("billed_to_client").notNull().default(false),
+  billedAmountCents: money("billed_amount_cents").notNull().default(0),
+  documentId: integer("document_id"), // invoice the billed amount flowed into
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgStatusIdx: index("idx_damage_reports_org_status").on(t.orgId, t.liabilityStatus),
+  itemIdx: index("idx_damage_reports_item").on(t.inventoryItemId),
+}));
+
+/** External hire-out — the org's own gear rented to another event company.
+ *  Shares the same inventoryItems status machine (on_external_hire) but is
+ *  a distinct contract type from an internal project. */
+export const hireContracts = pgTable("hire_contracts", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItems.id),
+  qty: doublePrecision("qty").notNull().default(1),
+  externalClientName: text("external_client_name").notNull(),
+  externalClientPhone: text("external_client_phone"),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  actualReturnDate: text("actual_return_date"),
+  hireFeeCents: money("hire_fee_cents").notNull().default(0),
+  depositCents: money("deposit_cents").notNull().default(0),
+  depositReturned: boolean("deposit_returned").notNull().default(false),
+  status: text("status").notNull().default("out"), // out | returned | overdue
+  documentId: integer("document_id"), // optional invoice for the hire fee
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgStatusIdx: index("idx_hire_contracts_org_status").on(t.orgId, t.status),
+  itemIdx: index("idx_hire_contracts_item").on(t.inventoryItemId),
 }));

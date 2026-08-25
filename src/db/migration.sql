@@ -912,3 +912,113 @@ ALTER TABLE loan_ledger ADD COLUMN IF NOT EXISTS disbursement_journal_entry_id I
 ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS disposal_type TEXT;
 
 ALTER TABLE org ADD COLUMN IF NOT EXISTS website TEXT;
+
+-- ---------------------------------------------------------------------
+-- Events vertical (Zeno Events) — Phase 0/1 schema slice.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS project_id INTEGER;
+CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  contact_id INTEGER,
+  name TEXT NOT NULL,
+  event_type TEXT,
+  venue TEXT,
+  event_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'lead',
+  budget_cents BIGINT NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_projects_org ON projects(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_projects_contact ON projects(contact_id);
+CREATE INDEX IF NOT EXISTS idx_projects_event_date ON projects(org_id, event_date);
+
+CREATE TABLE IF NOT EXISTS inventory_items (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  item_id INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  qty DOUBLE PRECISION NOT NULL DEFAULT 1,
+  condition TEXT NOT NULL DEFAULT 'good',
+  status TEXT NOT NULL DEFAULT 'in_store',
+  warehouse_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_org_item ON inventory_items(org_id, item_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_status ON inventory_items(org_id, status);
+
+CREATE TABLE IF NOT EXISTS reservations (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  inventory_item_id INTEGER NOT NULL REFERENCES inventory_items(id),
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  qty DOUBLE PRECISION NOT NULL DEFAULT 1,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'booked',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reservations_item_dates ON reservations(inventory_item_id, start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_reservations_project ON reservations(project_id);
+
+CREATE TABLE IF NOT EXISTS payment_schedule (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  milestone_name TEXT NOT NULL,
+  trigger_type TEXT NOT NULL,
+  trigger_value TEXT,
+  amount_type TEXT NOT NULL,
+  percentage_value DOUBLE PRECISION,
+  fixed_amount_cents BIGINT,
+  sequence_order INTEGER NOT NULL DEFAULT 0,
+  document_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_schedule_project ON payment_schedule(project_id);
+
+CREATE TABLE IF NOT EXISTS damage_reports (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  inventory_item_id INTEGER NOT NULL REFERENCES inventory_items(id),
+  project_id INTEGER,
+  reservation_id INTEGER,
+  reported_by_member_id INTEGER,
+  damage_type TEXT NOT NULL,
+  description TEXT,
+  photo_url TEXT NOT NULL,
+  stage_reported TEXT NOT NULL,
+  liability_status TEXT NOT NULL DEFAULT 'pending',
+  resolved_by_member_id INTEGER,
+  resolved_at TEXT,
+  billed_to_client BOOLEAN NOT NULL DEFAULT FALSE,
+  billed_amount_cents BIGINT NOT NULL DEFAULT 0,
+  document_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_damage_reports_org_status ON damage_reports(org_id, liability_status);
+CREATE INDEX IF NOT EXISTS idx_damage_reports_item ON damage_reports(inventory_item_id);
+
+CREATE TABLE IF NOT EXISTS hire_contracts (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  inventory_item_id INTEGER NOT NULL REFERENCES inventory_items(id),
+  qty DOUBLE PRECISION NOT NULL DEFAULT 1,
+  external_client_name TEXT NOT NULL,
+  external_client_phone TEXT,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  actual_return_date TEXT,
+  hire_fee_cents BIGINT NOT NULL DEFAULT 0,
+  deposit_cents BIGINT NOT NULL DEFAULT 0,
+  deposit_returned BOOLEAN NOT NULL DEFAULT FALSE,
+  status TEXT NOT NULL DEFAULT 'out',
+  document_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_hire_contracts_org_status ON hire_contracts(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_hire_contracts_item ON hire_contracts(inventory_item_id);
