@@ -20,8 +20,13 @@ export function InstallPrompt() {
   const [iosHint, setIosHint] = useState(false);
 
   useEffect(() => {
-    // register SW
-    if ("serviceWorker" in navigator) {
+    // Register the SW in production only. In dev, Turbopack recompiles
+    // constantly and the SW's cache-first /_next/static strategy (below)
+    // ends up serving a stale chunk against fresh server-rendered HTML —
+    // a hydration mismatch that has nothing to do with the component that
+    // happened to change last, and disappears the moment you register the
+    // SW is skipped.
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
 

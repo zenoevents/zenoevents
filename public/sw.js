@@ -1,7 +1,7 @@
 /* Minimal service worker — required for PWA installability.
    Network-first for navigations (always fresh accounting data), with a cached
    shell fallback when offline. Static assets are cache-first. */
-const CACHE = "zeno-v1";
+const CACHE = "zeno-v2";
 const SHELL = ["/"];
 
 self.addEventListener("install", (e) => {
