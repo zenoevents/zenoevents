@@ -691,6 +691,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_item_types_org_name ON item_types(org_id, 
 -- Customer/item group subgroups + toggle for customer groups + product/service split.
 ALTER TABLE org ADD COLUMN IF NOT EXISTS customer_groups_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 
+-- customer_groups was never captured in this migration history (only ever
+-- applied ad hoc against the original database) — creating it here so a
+-- fresh database (npm run db:push) doesn't fail on the ALTERs below.
+CREATE TABLE IF NOT EXISTS customer_groups (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  name TEXT NOT NULL,
+  parent_group_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_groups_org_name ON customer_groups(org_id, name);
+
 ALTER TABLE customer_groups ADD COLUMN IF NOT EXISTS parent_group_id INTEGER;
 CREATE INDEX IF NOT EXISTS idx_customer_groups_parent ON customer_groups(parent_group_id);
 
