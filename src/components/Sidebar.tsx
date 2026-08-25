@@ -20,6 +20,12 @@ const groups: {
     ],
   },
   {
+    label: "Projects",
+    items: [
+      { href: "/projects", label: "Projects", icon: "🎪", perm: "projects" },
+    ],
+  },
+  {
     label: "Selling",
     items: [
       { href: "/contacts", label: "Customers & Vendors", icon: "👥", perm: "contacts" },

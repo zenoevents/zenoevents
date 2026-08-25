@@ -30,6 +30,7 @@ export const MODULES: { key: string; label: string }[] = [
   { key: "bills", label: "Bills" },
   { key: "purchase_orders", label: "Purchase orders" },
   { key: "items", label: "Items & Stock" },
+  { key: "projects", label: "Projects (Events)" },
   { key: "banking", label: "Bank & M-Pesa" },
   { key: "payroll", label: "Payroll" },
   { key: "fixed_assets", label: "Fixed Assets" },
@@ -47,10 +48,10 @@ const ALL = MODULES.map((m) => m.key);
 export const DEFAULT_ROLE_PERMS: Record<Role, string[]> = {
   admin: ALL,
   accountant: ALL.filter((k) => !["staff", "settings", "can_payout"].includes(k)),
-  sales: ["dashboard", "dashboard_metrics", "contacts", "pipeline", "quotes", "quote_templates", "invoices", "invoice_templates", "credit_notes", "items", "expense_claims", "leave_requests"],
+  sales: ["dashboard", "dashboard_metrics", "contacts", "pipeline", "quotes", "quote_templates", "invoices", "invoice_templates", "credit_notes", "items", "projects", "expense_claims", "leave_requests"],
   hr: ["dashboard", "dashboard_metrics", "contacts", "reports", "payroll", "expense_claims", "leave_requests", "announcements"],
-  inventory: ["dashboard", "dashboard_metrics", "items", "purchase_orders", "bills", "contacts", "expense_claims", "leave_requests"],
-  staff: ["dashboard", "dashboard_metrics", "expense_claims", "leave_requests"],
+  inventory: ["dashboard", "dashboard_metrics", "items", "purchase_orders", "bills", "contacts", "projects", "expense_claims", "leave_requests"],
+  staff: ["dashboard", "dashboard_metrics", "projects", "expense_claims", "leave_requests"],
 };
 
 export interface Access {

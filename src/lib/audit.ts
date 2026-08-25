@@ -5,7 +5,7 @@ import { getAccess } from "./access";
 export type AuditModule =
   | "contacts" | "quotes" | "invoices" | "credit_notes" | "bills" | "purchase_orders"
   | "expenses" | "payments" | "banking" | "items" | "payroll" | "staff" | "settings"
-  | "accountant" | "reports" | "leave_requests" | "expense_claims";
+  | "accountant" | "reports" | "leave_requests" | "expense_claims" | "projects";
 
 /**
  * Records one line in the org's audit trail. Reads the acting user off the
