@@ -53,11 +53,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-        <StatCard label="Budget" cents={financials.budgetCents} />
-        <StatCard label="Invoiced" cents={financials.invoicedCents} />
-        <StatCard label="Collected" cents={financials.collectedCents} tone="good" />
-        <StatCard label="Cost so far" cents={financials.costCents} tone={financials.costCents > financials.budgetCents && financials.budgetCents > 0 ? "bad" : "neutral"} />
-        <StatCard label="Margin" cents={financials.marginCents} tone={financials.marginCents >= 0 ? "good" : "bad"} />
+        <StatCard compact label="Budget" cents={financials.budgetCents} />
+        <StatCard compact label="Invoiced" cents={financials.invoicedCents} />
+        <StatCard compact label="Collected" cents={financials.collectedCents} tone="good" />
+        <StatCard compact label="Cost so far" cents={financials.costCents} tone={financials.costCents > financials.budgetCents && financials.budgetCents > 0 ? "bad" : "neutral"} />
+        <StatCard compact label="Margin" cents={financials.marginCents} tone={financials.marginCents >= 0 ? "good" : "bad"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
