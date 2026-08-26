@@ -46,6 +46,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         action={
           <div className="flex items-center gap-2">
             <ProjectStatusControl id={project.id} status={project.status as ProjectStatus} />
+            <Link href={`/projects/${project.id}/manifest`} className="rounded-lg border border-[var(--color-ink-200)] bg-white hover:bg-[var(--color-ink-50)] text-[13px] font-medium px-4 py-2 transition-colors">Manifest</Link>
             <PrimaryLink href={`/projects/${project.id}/edit`}>Edit</PrimaryLink>
           </div>
         }

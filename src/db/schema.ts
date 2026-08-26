@@ -1442,3 +1442,57 @@ export const hireContracts = pgTable("hire_contracts", {
   orgStatusIdx: index("idx_hire_contracts_org_status").on(t.orgId, t.status),
   itemIdx: index("idx_hire_contracts_item").on(t.inventoryItemId),
 }));
+
+/**
+ * One manifest per project — the dispatch/return checklist that turns
+ * "we reserved this gear" into "it's actually loaded, at the venue, and
+ * back." Manifest-level status is deliberately coarse (draft/confirmed/
+ * in_progress/reconciled); the real per-item granularity — who picked,
+ * loaded, dispatched, collected, returned, and inspected each line, and
+ * when — lives on manifestLines below. This is what the loading/warehouse/
+ * collection staff roles actually work off day to day.
+ */
+export const manifests = pgTable("manifests", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  status: text("status").notNull().default("draft"), // draft | confirmed | in_progress | reconciled
+  assignedLoadingMemberId: integer("assigned_loading_member_id"),
+  assignedWarehouseMemberId: integer("assigned_warehouse_member_id"),
+  assignedCollectionMemberId: integer("assigned_collection_member_id"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+  confirmedAt: text("confirmed_at"),
+  reconciledAt: text("reconciled_at"),
+}, (t) => ({
+  orgProjectUnique: uniqueIndex("idx_manifests_org_project").on(t.orgId, t.projectId),
+  orgStatusIdx: index("idx_manifests_org_status").on(t.orgId, t.status),
+}));
+
+/** One row per item on a manifest — durable gear (tied to a specific
+ *  inventoryItems instance/batch) or a consumable (quoted qty vs. actual
+ *  qty used, no pack/dispatch/return legs). status walks pending -> picked
+ *  -> loaded -> dispatched -> collected -> returned -> one of the
+ *  inspected_* terminal outcomes. inspected_damaged/inspected_missing link
+ *  to a damageReports row (photo required — see damage-reports.ts) rather
+ *  than duplicating that flow here. */
+export const manifestLines = pgTable("manifest_lines", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  manifestId: integer("manifest_id").notNull().references(() => manifests.id),
+  lineType: text("line_type").notNull(), // durable | consumable
+  inventoryItemId: integer("inventory_item_id"), // durable lines
+  itemId: integer("item_id"), // catalog item — consumable lines, and descriptive for durable
+  description: text("description").notNull(),
+  qtyRequested: doublePrecision("qty_requested").notNull().default(1),
+  qtyUsed: doublePrecision("qty_used"), // consumables — actual usage, set at reconciliation
+  status: text("status").notNull().default("pending"),
+  checkedByMemberId: integer("checked_by_member_id"),
+  checkedAt: text("checked_at"),
+  notes: text("notes"),
+  damageReportId: integer("damage_report_id"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgManifestIdx: index("idx_manifest_lines_org_manifest").on(t.orgId, t.manifestId),
+  inventoryItemIdx: index("idx_manifest_lines_inventory_item").on(t.inventoryItemId),
+}));

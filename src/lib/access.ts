@@ -10,7 +10,7 @@ import { getUser } from "./supabase/server";
  * toggles live in role_permissions and override the defaults below.
  */
 
-export const ROLES = ["admin", "accountant", "sales", "hr", "inventory", "staff"] as const;
+export const ROLES = ["admin", "accountant", "sales", "hr", "inventory", "staff", "loading_staff", "warehouse_staff", "collection_staff"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const MODULES: { key: string; label: string }[] = [
@@ -31,6 +31,7 @@ export const MODULES: { key: string; label: string }[] = [
   { key: "purchase_orders", label: "Purchase orders" },
   { key: "items", label: "Items & Stock" },
   { key: "projects", label: "Projects (Events)" },
+  { key: "manifests", label: "Manifests (dispatch checklists)" },
   { key: "banking", label: "Bank & M-Pesa" },
   { key: "payroll", label: "Payroll" },
   { key: "fixed_assets", label: "Fixed Assets" },
@@ -50,8 +51,14 @@ export const DEFAULT_ROLE_PERMS: Record<Role, string[]> = {
   accountant: ALL.filter((k) => !["staff", "settings", "can_payout"].includes(k)),
   sales: ["dashboard", "dashboard_metrics", "contacts", "pipeline", "quotes", "quote_templates", "invoices", "invoice_templates", "credit_notes", "items", "projects", "expense_claims", "leave_requests"],
   hr: ["dashboard", "dashboard_metrics", "contacts", "reports", "payroll", "expense_claims", "leave_requests", "announcements"],
-  inventory: ["dashboard", "dashboard_metrics", "items", "purchase_orders", "bills", "contacts", "projects", "expense_claims", "leave_requests"],
+  inventory: ["dashboard", "dashboard_metrics", "items", "purchase_orders", "bills", "contacts", "projects", "manifests", "expense_claims", "leave_requests"],
   staff: ["dashboard", "dashboard_metrics", "projects", "expense_claims", "leave_requests"],
+  // The three operational roles from the events-vertical brainstorm — narrow
+  // by design: a mobile checklist, not the full admin picture. One person
+  // can hold more than one of these via custom-role stacking if needed.
+  loading_staff: ["dashboard", "dashboard_metrics", "manifests", "expense_claims", "leave_requests"],
+  warehouse_staff: ["dashboard", "dashboard_metrics", "manifests", "items", "expense_claims", "leave_requests"],
+  collection_staff: ["dashboard", "dashboard_metrics", "manifests", "expense_claims", "leave_requests"],
 };
 
 export interface Access {

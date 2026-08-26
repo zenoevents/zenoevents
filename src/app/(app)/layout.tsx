@@ -25,6 +25,9 @@ const roleLabels: Record<string, string> = {
   hr: "HR",
   inventory: "Inventory",
   staff: "Staff",
+  loading_staff: "Loading Staff",
+  warehouse_staff: "Warehouse Staff",
+  collection_staff: "Collection Staff",
 };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

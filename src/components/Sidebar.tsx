@@ -25,6 +25,7 @@ const groups: {
       { href: "/projects", label: "Projects", icon: "🎪", perm: "projects" },
       { href: "/projects/inventory", label: "Event Inventory", icon: "🪑", perm: "projects" },
       { href: "/projects/damage-reports", label: "Damage Reports", icon: "📸", perm: "projects" },
+      { href: "/manifests", label: "My Tasks", icon: "✅", perm: "manifests" },
     ],
   },
   {

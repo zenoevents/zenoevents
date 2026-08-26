@@ -1022,3 +1022,43 @@ CREATE TABLE IF NOT EXISTS hire_contracts (
 );
 CREATE INDEX IF NOT EXISTS idx_hire_contracts_org_status ON hire_contracts(org_id, status);
 CREATE INDEX IF NOT EXISTS idx_hire_contracts_item ON hire_contracts(inventory_item_id);
+
+-- ---------------------------------------------------------------------
+-- Manifest / dispatch checklist system.
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS manifests (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  status TEXT NOT NULL DEFAULT 'draft',
+  assigned_loading_member_id INTEGER,
+  assigned_warehouse_member_id INTEGER,
+  assigned_collection_member_id INTEGER,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  confirmed_at TEXT,
+  reconciled_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_manifests_org_project ON manifests(org_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_manifests_org_status ON manifests(org_id, status);
+
+CREATE TABLE IF NOT EXISTS manifest_lines (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  manifest_id INTEGER NOT NULL REFERENCES manifests(id),
+  line_type TEXT NOT NULL,
+  inventory_item_id INTEGER,
+  item_id INTEGER,
+  description TEXT NOT NULL,
+  qty_requested DOUBLE PRECISION NOT NULL DEFAULT 1,
+  qty_used DOUBLE PRECISION,
+  status TEXT NOT NULL DEFAULT 'pending',
+  checked_by_member_id INTEGER,
+  checked_at TEXT,
+  notes TEXT,
+  damage_report_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_manifest_lines_org_manifest ON manifest_lines(org_id, manifest_id);
+CREATE INDEX IF NOT EXISTS idx_manifest_lines_inventory_item ON manifest_lines(inventory_item_id);

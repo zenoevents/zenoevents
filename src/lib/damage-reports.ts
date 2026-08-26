@@ -1,7 +1,7 @@
 "use server";
 
 import crypto from "crypto";
-import { db, damageReports, inventoryItems, items, projects, members, documents } from "@/db";
+import { db, damageReports, inventoryItems, items, projects, members, documents, manifestLines, manifests } from "@/db";
 import { eq, and, ne, desc } from "drizzle-orm";
 import { withOrg, currentOrgId } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
@@ -60,6 +60,10 @@ export async function createDamageReportAction(params: {
   inventoryItemId: number;
   projectId?: number | null;
   reservationId?: number | null;
+  /** Set when this report comes from inspecting a returned manifest line —
+   *  the line's status flips to inspected_damaged/inspected_missing on
+   *  success, closing the loop back into the checklist. */
+  manifestLineId?: number | null;
   damageType: string;
   description?: string;
   stageReported: string;
@@ -78,7 +82,7 @@ export async function createDamageReportAction(params: {
       const photoPath = await uploadDamagePhoto(orgId, params.base64Image, params.mimeType);
       const access = await getAccess();
 
-      await db.insert(damageReports).values({
+      const [report] = await db.insert(damageReports).values({
         orgId,
         inventoryItemId: params.inventoryItemId,
         projectId: params.projectId ?? null,
@@ -90,14 +94,30 @@ export async function createDamageReportAction(params: {
         stageReported: params.stageReported,
         liabilityStatus: "pending",
         createdAt: nowISO(),
-      });
+      }).returning({ id: damageReports.id });
 
       await db.update(inventoryItems).set({ condition: "damaged" }).where(and(
         eq(inventoryItems.orgId, orgId), eq(inventoryItems.id, params.inventoryItemId)
       ));
 
+      if (params.manifestLineId) {
+        const [line] = await db.select({ id: manifestLines.id, manifestId: manifestLines.manifestId }).from(manifestLines)
+          .where(and(eq(manifestLines.orgId, orgId), eq(manifestLines.id, params.manifestLineId))).limit(1);
+        if (line) {
+          await db.update(manifestLines).set({
+            status: params.damageType === "missing" ? "inspected_missing" : "inspected_damaged",
+            damageReportId: report.id,
+            checkedByMemberId: access?.memberId ?? null,
+            checkedAt: nowISO(),
+          }).where(eq(manifestLines.id, line.id));
+          const [manifest] = await db.select({ projectId: manifests.projectId }).from(manifests).where(eq(manifests.id, line.manifestId)).limit(1);
+          if (manifest) revalidatePath(`/projects/${manifest.projectId}/manifest`);
+        }
+      }
+
       await logAudit({ action: "damage_report.create", module: "projects", recordId: params.inventoryItemId });
       revalidatePath("/projects/damage-reports");
+      revalidatePath("/manifests");
       if (params.projectId) revalidatePath(`/projects/${params.projectId}`);
       return { success: true };
     });

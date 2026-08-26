@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 
-const ROLES = ["admin", "accountant", "sales", "hr", "inventory", "staff"] as const;
+const ROLES = ["admin", "accountant", "sales", "hr", "inventory", "staff", "loading_staff", "warehouse_staff", "collection_staff"] as const;
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { saveOrgProfile } from "@/lib/actions";
