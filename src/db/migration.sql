@@ -1002,6 +1002,7 @@ CREATE TABLE IF NOT EXISTS damage_reports (
 );
 CREATE INDEX IF NOT EXISTS idx_damage_reports_org_status ON damage_reports(org_id, liability_status);
 CREATE INDEX IF NOT EXISTS idx_damage_reports_item ON damage_reports(inventory_item_id);
+CREATE INDEX IF NOT EXISTS idx_damage_reports_org_project ON damage_reports(org_id, project_id);
 
 CREATE TABLE IF NOT EXISTS hire_contracts (
   id SERIAL PRIMARY KEY,

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createDamageReportAction } from "@/lib/damage-reports";
 import { DAMAGE_TYPES, STAGE_OPTIONS } from "@/lib/liability-status";
+import { PhotoCapture } from "@/components/PhotoCapture";
 
 type InventoryOption = { id: number; label: string; itemName: string | null };
 type DamageRow = {
@@ -15,15 +16,6 @@ type DamageRow = {
   liabilityStatus: string;
   createdAt: string;
 };
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1] || "");
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 const stageLabels: Record<string, string> = {
   loading: "Loading (before it left the store)",
@@ -52,24 +44,14 @@ export function DamageReportPanel({
   const [damageType, setDamageType] = useState("broken");
   const [stageReported, setStageReported] = useState("inspection");
   const [description, setDescription] = useState("");
-  const [preview, setPreview] = useState<string | null>(null);
-  const [base64, setBase64] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<{ base64: string; mimeType: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPreview(URL.createObjectURL(file));
-    setMimeType(file.type);
-    setBase64(await fileToBase64(file));
-  }
 
   async function submit() {
     setError(null);
     if (!inventoryItemId) { setError("Pick which item was damaged"); return; }
-    if (!base64 || !mimeType) { setError("A photo is required — no report without one"); return; }
+    if (!photo) { setError("A photo is required — no report without one"); return; }
     setPending(true);
     try {
       const result = await createDamageReportAction({
@@ -78,8 +60,8 @@ export function DamageReportPanel({
         damageType,
         stageReported,
         description,
-        base64Image: base64,
-        mimeType,
+        base64Image: photo.base64,
+        mimeType: photo.mimeType,
       });
       if ("error" in result) { setError(result.error); return; }
       window.location.reload();
@@ -133,24 +115,7 @@ export function DamageReportPanel({
           className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
         />
 
-        <div>
-          <span className="text-[12px] font-medium text-[var(--color-ink-600)]">
-            Photo <span className="font-normal text-[var(--color-bad)]">— required, camera only</span>
-          </span>
-          <div className="mt-1 flex items-center gap-3">
-            {preview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="Damage preview" className="h-14 w-14 rounded-lg object-cover border border-[var(--color-ink-200)]" />
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handlePhoto}
-              className="text-[12.5px] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--color-ink-100)] file:px-3 file:py-1.5 file:text-[12.5px] file:font-medium"
-            />
-          </div>
-        </div>
+        <PhotoCapture required onChange={(p) => setPhoto(p ? { base64: p.base64, mimeType: p.mimeType } : null)} />
 
         {error && <div className="text-[12px] text-[var(--color-bad)]">{error}</div>}
 

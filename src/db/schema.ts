@@ -1417,6 +1417,7 @@ export const damageReports = pgTable("damage_reports", {
 }, (t) => ({
   orgStatusIdx: index("idx_damage_reports_org_status").on(t.orgId, t.liabilityStatus),
   itemIdx: index("idx_damage_reports_item").on(t.inventoryItemId),
+  orgProjectIdx: index("idx_damage_reports_org_project").on(t.orgId, t.projectId),
 }));
 
 /** External hire-out — the org's own gear rented to another event company.

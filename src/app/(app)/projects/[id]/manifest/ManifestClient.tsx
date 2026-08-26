@@ -8,6 +8,7 @@ import {
 import { createDamageReportAction } from "@/lib/damage-reports";
 import { LINE_TRANSITIONS, LINE_STATUS_LABELS, type LineStatus } from "@/lib/manifest-status";
 import { PrimaryButton, EmptyState } from "@/components/ui";
+import { PhotoCapture } from "@/components/PhotoCapture";
 
 type Line = {
   id: number;
@@ -38,35 +39,16 @@ const manifestStatusLabels: Record<string, string> = {
   draft: "Draft", confirmed: "Confirmed", in_progress: "In progress", reconciled: "Reconciled",
 };
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1] || "");
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 function DamageInline({ line, projectId, onDone }: { line: Line; projectId: number; onDone: () => void }) {
   const [damageType, setDamageType] = useState<"broken" | "missing" | "other">("broken");
-  const [base64, setBase64] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState<string | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<{ base64: string; mimeType: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPreview(URL.createObjectURL(file));
-    setMimeType(file.type);
-    setBase64(await fileToBase64(file));
-  }
 
   async function submit() {
     setError(null);
     if (!line.inventoryItemId) { setError("This line has no inventory item to report"); return; }
-    if (!base64 || !mimeType) { setError("A photo is required"); return; }
+    if (!photo) { setError("A photo is required"); return; }
     setPending(true);
     try {
       const result = await createDamageReportAction({
@@ -75,8 +57,8 @@ function DamageInline({ line, projectId, onDone }: { line: Line; projectId: numb
         manifestLineId: line.id,
         damageType,
         stageReported: "inspection",
-        base64Image: base64,
-        mimeType,
+        base64Image: photo.base64,
+        mimeType: photo.mimeType,
       });
       if ("error" in result) { setError(result.error); return; }
       onDone();
@@ -92,11 +74,7 @@ function DamageInline({ line, projectId, onDone }: { line: Line; projectId: numb
         <option value="missing">Missing</option>
         <option value="other">Other</option>
       </select>
-      <div className="flex items-center gap-2">
-        {preview && <img src={preview} alt="preview" className="h-10 w-10 rounded object-cover border border-[var(--color-ink-200)]" />}
-        <input type="file" accept="image/*" capture="environment" onChange={handlePhoto}
-          className="text-[11.5px] file:mr-2 file:rounded-lg file:border-0 file:bg-[var(--color-ink-100)] file:px-2 file:py-1 file:text-[11.5px]" />
-      </div>
+      <PhotoCapture required onChange={(p) => setPhoto(p ? { base64: p.base64, mimeType: p.mimeType } : null)} />
       {error && <div className="text-[11.5px] text-[var(--color-bad)]">{error}</div>}
       <button disabled={pending} onClick={submit} className="text-[12px] font-medium text-white bg-[var(--color-bad)] rounded-lg px-3 py-1.5 disabled:opacity-50">
         {pending ? "Submitting…" : "Submit damage report"}
