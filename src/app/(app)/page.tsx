@@ -10,8 +10,15 @@ import { IncomeExpenseChart, TodoWidget, CalendarWidget } from "@/components/Das
 import { DocOverview } from "@/components/DocOverview";
 import { TimeTrackingCard } from "@/components/TimeTrackingCard";
 import { getActiveShift } from "@/lib/time-tracking";
+import { upcomingEventsStrip, unpaidMilestoneRisks, pendingDamageCount, manifestPipelineCounts, projectPipelineCounts, warehouseSummary } from "@/lib/dashboard-events";
+import { listMyManifestTasks } from "@/lib/manifests";
+import { ThisWeeksEvents, UnpaidMilestoneRisks, OpsSummaryRow, SalesPipelineFunnel } from "@/components/EventsDashboardWidgets";
+import { OperationalDashboard } from "@/components/OperationalDashboard";
 
 export const dynamic = "force-dynamic";
+
+const OPERATIONAL_ROLES = new Set(["loading_staff", "collection_staff"]);
+const WAREHOUSE_ROLES = new Set(["warehouse_staff"]);
 
 export default async function Dashboard({
   searchParams,
@@ -29,6 +36,21 @@ export default async function Dashboard({
     const viewAll = access ? canViewAllData(access) : true;
     const ownOnly = !!access && !viewAll && access.perms.has("dashboard_metrics") && !!access.memberId;
     const isOwnerOrAdmin = !access || access.isOwner || access.role === "admin";
+
+    // Loading/collection/warehouse staff get a task-focused dashboard, not
+    // the SME financial one — "today only, nothing else" per the events-
+    // vertical brainstorm. Short-circuits before any of the heavier
+    // financial queries below even run.
+    if (access && OPERATIONAL_ROLES.has(access.role)) {
+      const tasks = await listMyManifestTasks();
+      return <OperationalDashboard orgName={o?.name ?? "there"} tasks={tasks} />;
+    }
+    if (access && WAREHOUSE_ROLES.has(access.role)) {
+      const [tasks, warehouse] = await Promise.all([listMyManifestTasks(), warehouseSummary()]);
+      return <OperationalDashboard orgName={o?.name ?? "there"} tasks={tasks} warehouse={warehouse} />;
+    }
+
+    const showEvents = !!access && (isOwnerOrAdmin || access.role === "sales") && access.perms.has("projects");
 
     const recentDocsWhere = [
       eq(documents.orgId, o.id),
@@ -67,7 +89,7 @@ export default async function Dashboard({
     }
 
     // All independent — fire in parallel
-    const [stats, memberStats, chartData, overview, activeShift, recentDocs, todoRows, eventRows, dueDocs, recurringRows] =
+    const [stats, memberStats, chartData, overview, activeShift, recentDocs, todoRows, eventRows, dueDocs, recurringRows, weekEvents, milestoneRisks, damageCount, manifestCounts, pipelineCounts] =
       await Promise.all([
         ownOnly ? Promise.resolve(null) : dashboardStats(today),
         ownOnly ? memberDashboardStats(access!.memberId!, today) : Promise.resolve(null),
@@ -95,6 +117,11 @@ export default async function Dashboard({
         viewAll
           ? db.select().from(recurringTemplates).where(and(eq(recurringTemplates.orgId, o.id), eq(recurringTemplates.active, true)))
           : Promise.resolve([]),
+        showEvents ? upcomingEventsStrip(7) : Promise.resolve([]),
+        showEvents && isOwnerOrAdmin ? unpaidMilestoneRisks(14) : Promise.resolve([]),
+        showEvents && isOwnerOrAdmin ? pendingDamageCount() : Promise.resolve(0),
+        showEvents && isOwnerOrAdmin ? manifestPipelineCounts() : Promise.resolve({}),
+        showEvents && access?.role === "sales" ? projectPipelineCounts() : Promise.resolve({}),
       ]);
 
     const years = [thisYear, String(Number(thisYear) - 1), String(Number(thisYear) - 2)];
@@ -105,6 +132,15 @@ export default async function Dashboard({
           title={`Good ${greeting()}, ${o?.name ?? "there"}`}
           subtitle={new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         />
+
+        {showEvents && (
+          <div className="space-y-4 mb-6">
+            <ThisWeeksEvents events={weekEvents} />
+            {isOwnerOrAdmin && <UnpaidMilestoneRisks risks={milestoneRisks} />}
+            {isOwnerOrAdmin && <OpsSummaryRow pendingDamage={damageCount} manifestCounts={manifestCounts} />}
+            {access?.role === "sales" && <SalesPipelineFunnel counts={pipelineCounts} />}
+          </div>
+        )}
 
         {o.timeTrackingEnabled && (
           <TimeTrackingCard
