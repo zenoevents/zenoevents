@@ -1323,6 +1323,7 @@ export const projects = pgTable("projects", {
   name: text("name").notNull(),
   eventType: text("event_type"), // wedding | corporate | gala | other — free text, not enforced
   venue: text("venue"),
+  colorTheme: text("color_theme"), // client's decor color scheme, e.g. "Sage green & gold" — free text
   eventDate: text("event_date").notNull(),
   status: text("status").notNull().default("lead"), // lead | quoted | confirmed | in_progress | completed | cancelled
   budgetCents: money("budget_cents").notNull().default(0),
@@ -1365,6 +1366,7 @@ export const reservations = pgTable("reservations", {
   qty: doublePrecision("qty").notNull().default(1), // portion of a batch this project holds
   startDate: text("start_date").notNull(), // dispatch date
   endDate: text("end_date").notNull(), // expected return date
+  location: text("location"), // which zone of the venue this booking goes to, e.g. "Main Arena" — per-booking, not the item's catalog category or its storage warehouse
   status: text("status").notNull().default("booked"), // booked | dispatched | returned | cancelled
   createdAt: text("created_at").notNull(),
 }, (t) => ({
@@ -1390,6 +1392,29 @@ export const paymentSchedule = pgTable("payment_schedule", {
   createdAt: text("created_at").notNull(),
 }, (t) => ({
   projectIdx: index("idx_payment_schedule_project").on(t.projectId),
+}));
+
+/** Client service agreement for an event — separate from `documents`
+ *  since it's not a financial/ledger record. "Signing" it means uploading
+ *  a photo of the printed, wet-ink-signed copy (same real-world pattern as
+ *  damageReports.photoUrl), not a canvas e-signature pad. */
+export const contracts = pgTable("contracts", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  subject: text("subject").notNull(),
+  valueCents: money("value_cents").notNull().default(0),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date"),
+  status: text("status").notNull().default("draft"), // draft | sent | signed | declined | expired
+  content: text("content"), // plain-text terms
+  signaturePhotoPath: text("signature_photo_path"), // storage path — private bucket, signed URL on read
+  signedAt: text("signed_at"),
+  signedByName: text("signed_by_name"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgProjectIdx: index("idx_contracts_org_project").on(t.orgId, t.projectId),
+  statusIdx: index("idx_contracts_org_status").on(t.orgId, t.status),
 }));
 
 /** Photo-backed liability record, one per damaged/missing unit. No row can
@@ -1487,6 +1512,7 @@ export const manifestLines = pgTable("manifest_lines", {
   description: text("description").notNull(),
   qtyRequested: doublePrecision("qty_requested").notNull().default(1),
   qtyUsed: doublePrecision("qty_used"), // consumables — actual usage, set at reconciliation
+  location: text("location"), // copied from the source reservation at manifest creation — which venue zone this line goes to
   status: text("status").notNull().default("pending"),
   checkedByMemberId: integer("checked_by_member_id"),
   checkedAt: text("checked_at"),

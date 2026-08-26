@@ -12,6 +12,7 @@ type ReservationRow = {
   qty: number;
   startDate: string;
   endDate: string;
+  location: string | null;
   status: string;
 };
 
@@ -30,6 +31,7 @@ export function ReserveInventoryPanel({
   const [qty, setQty] = useState("1");
   const [startDate, setStartDate] = useState(eventDate);
   const [endDate, setEndDate] = useState(eventDate);
+  const [location, setLocation] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<{ projectName: string | null; startDate: string; endDate: string }[] | null>(null);
@@ -45,6 +47,7 @@ export function ReserveInventoryPanel({
         qty: parseFloat(qty) || 1,
         startDate,
         endDate,
+        location,
         force,
       });
       if (result.conflict) {
@@ -53,6 +56,7 @@ export function ReserveInventoryPanel({
       }
       setConflict(null);
       setInventoryItemId("");
+      setLocation("");
       window.location.reload();
     } catch (e: any) {
       setError(e.message ?? "Couldn't reserve this item");
@@ -80,7 +84,10 @@ export function ReserveInventoryPanel({
           {reservations.map((r) => (
             <div key={r.id} className="flex items-center justify-between rounded-lg border border-[var(--color-ink-100)] px-3 py-2 text-[13px]">
               <div>
-                <div className="font-medium">{r.itemName} — {r.label}</div>
+                <div className="font-medium">
+                  {r.itemName} — {r.label}
+                  {r.location && <span className="ml-2 inline-block rounded-full bg-[var(--color-accent-50)] text-[var(--color-accent-700)] text-[10.5px] font-medium px-2 py-0.5 align-middle">{r.location}</span>}
+                </div>
                 <div className="text-[11.5px] text-[var(--color-ink-400)]">{r.qty}× · {r.startDate} → {r.endDate} · {r.status}</div>
               </div>
               {r.status !== "cancelled" && (
@@ -111,6 +118,9 @@ export function ReserveInventoryPanel({
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
             className="rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]" />
         </div>
+        <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
+          placeholder="Location at venue (optional) — e.g. Main Arena"
+          className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]" />
 
         {error && <div className="text-[12px] text-[var(--color-bad)]">{error}</div>}
 

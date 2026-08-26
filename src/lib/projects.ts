@@ -43,6 +43,7 @@ export async function getProject(id: number) {
         name: projects.name,
         eventType: projects.eventType,
         venue: projects.venue,
+        colorTheme: projects.colorTheme,
         eventDate: projects.eventDate,
         status: projects.status,
         budgetCents: projects.budgetCents,
@@ -125,6 +126,7 @@ export async function createProjectAction(formData: FormData) {
     const eventDate = formData.get("eventDate") as string;
     const eventType = (formData.get("eventType") as string) || null;
     const venue = (formData.get("venue") as string) || null;
+    const colorTheme = (formData.get("colorTheme") as string) || null;
     const contactIdRaw = formData.get("contactId") as string;
     const contactId = contactIdRaw ? parseInt(contactIdRaw, 10) : null;
     const budgetCents = Math.round(parseFloat((formData.get("budget") as string) || "0") * 100);
@@ -138,6 +140,7 @@ export async function createProjectAction(formData: FormData) {
       name,
       eventType,
       venue,
+      colorTheme,
       eventDate,
       budgetCents: Number.isFinite(budgetCents) ? budgetCents : 0,
       notes,
@@ -178,6 +181,7 @@ export async function updateProjectAction(id: number, formData: FormData) {
     const eventDate = formData.get("eventDate") as string;
     const eventType = (formData.get("eventType") as string) || null;
     const venue = (formData.get("venue") as string) || null;
+    const colorTheme = (formData.get("colorTheme") as string) || null;
     const contactIdRaw = formData.get("contactId") as string;
     const contactId = contactIdRaw ? parseInt(contactIdRaw, 10) : null;
     const budgetCents = Math.round(parseFloat((formData.get("budget") as string) || "0") * 100);
@@ -186,7 +190,7 @@ export async function updateProjectAction(id: number, formData: FormData) {
     if (!name || !eventDate) throw new Error("Name and event date are required");
 
     await db.update(projects).set({
-      name, eventDate, eventType, venue, contactId,
+      name, eventDate, eventType, venue, colorTheme, contactId,
       budgetCents: Number.isFinite(budgetCents) ? budgetCents : 0,
       notes,
     }).where(eq(projects.id, id));

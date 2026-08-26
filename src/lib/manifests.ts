@@ -34,6 +34,7 @@ export async function getManifestForProject(projectId: number) {
         description: manifestLines.description,
         qtyRequested: manifestLines.qtyRequested,
         qtyUsed: manifestLines.qtyUsed,
+        location: manifestLines.location,
         status: manifestLines.status,
         checkedByName: members.name,
         checkedAt: manifestLines.checkedAt,
@@ -71,6 +72,7 @@ export async function createManifestAction(projectId: number): Promise<{ success
         .select({
           inventoryItemId: reservations.inventoryItemId,
           qty: reservations.qty,
+          location: reservations.location,
           itemLabel: inventoryItems.label,
           itemName: items.name,
           catalogItemId: inventoryItems.itemId,
@@ -93,6 +95,7 @@ export async function createManifestAction(projectId: number): Promise<{ success
           itemId: r.catalogItemId,
           description: `${r.itemName ?? "Item"} — ${r.itemLabel ?? ""}`.trim(),
           qtyRequested: r.qty,
+          location: r.location,
           status: "pending",
           createdAt: nowISO(),
         })));

@@ -19,6 +19,7 @@ type Line = {
   description: string;
   qtyRequested: number;
   qtyUsed: number | null;
+  location: string | null;
   status: string;
   checkedByName: string | null;
   checkedAt: string | null;
@@ -125,6 +126,7 @@ function LineRow({ line, projectId, viewerRole, isAdmin, onChanged }: { line: Li
           </div>
           <div className="text-[11.5px] text-[var(--color-ink-400)]">
             {line.lineType === "consumable" ? "Consumable" : "Durable"} · qty {line.qtyRequested}
+            {line.location ? ` · ${line.location}` : ""}
             {line.checkedByName ? ` · last touched by ${line.checkedByName}` : ""}
           </div>
         </div>

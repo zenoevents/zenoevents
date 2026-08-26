@@ -118,6 +118,7 @@ export async function listReservationsForProject(projectId: number) {
         qty: reservations.qty,
         startDate: reservations.startDate,
         endDate: reservations.endDate,
+        location: reservations.location,
         status: reservations.status,
       })
       .from(reservations)
@@ -180,6 +181,7 @@ export async function createReservationAction(params: {
   qty: number;
   startDate: string;
   endDate: string;
+  location?: string | null;
   force?: boolean;
 }) {
   await requirePerm("projects");
@@ -202,6 +204,7 @@ export async function createReservationAction(params: {
       qty: params.qty,
       startDate: params.startDate,
       endDate: params.endDate,
+      location: params.location?.trim() || null,
       status: "booked",
       createdAt: nowISO(),
     });

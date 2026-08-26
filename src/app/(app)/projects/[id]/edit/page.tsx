@@ -43,6 +43,11 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
         </label>
 
         <label className="block">
+          <span className={label}>Color theme</span>
+          <input name="colorTheme" type="text" defaultValue={project.colorTheme ?? ""} placeholder="e.g. Sage green & gold" className={input} />
+        </label>
+
+        <label className="block">
           <span className={label}>Client</span>
           <select name="contactId" defaultValue={project.contactId ?? ""} className={input}>
             <option value="">No client yet — still a lead</option>

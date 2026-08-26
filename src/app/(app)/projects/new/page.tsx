@@ -37,6 +37,11 @@ export default async function NewProjectPage() {
         </label>
 
         <label className="block">
+          <span className={label}>Color theme</span>
+          <input name="colorTheme" type="text" placeholder="e.g. Sage green & gold" className={input} />
+        </label>
+
+        <label className="block">
           <span className={label}>Client</span>
           <select name="contactId" defaultValue="" className={input}>
             <option value="">No client yet — still a lead</option>

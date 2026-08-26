@@ -1063,3 +1063,27 @@ CREATE TABLE IF NOT EXISTS manifest_lines (
 );
 CREATE INDEX IF NOT EXISTS idx_manifest_lines_org_manifest ON manifest_lines(org_id, manifest_id);
 CREATE INDEX IF NOT EXISTS idx_manifest_lines_inventory_item ON manifest_lines(inventory_item_id);
+
+-- Projects upgrade: Contracts, Item Location, Color theme.
+
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS color_theme TEXT;
+ALTER TABLE reservations ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE manifest_lines ADD COLUMN IF NOT EXISTS location TEXT;
+
+CREATE TABLE IF NOT EXISTS contracts (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  subject TEXT NOT NULL,
+  value_cents BIGINT NOT NULL DEFAULT 0,
+  start_date TEXT NOT NULL,
+  end_date TEXT,
+  status TEXT NOT NULL DEFAULT 'draft',
+  content TEXT,
+  signature_photo_path TEXT,
+  signed_at TEXT,
+  signed_by_name TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contracts_org_project ON contracts(org_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_org_status ON contracts(org_id, status);
