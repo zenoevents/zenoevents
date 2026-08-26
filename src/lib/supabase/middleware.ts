@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { cleanEnv } from "@/lib/env";
+import { requireEnv } from "@/lib/env";
 
 /** Public paths that don't require authentication */
 const PUBLIC_PATHS = [
@@ -15,8 +15,8 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
-    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    requireEnv("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
+    requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     {
       cookies: {
         getAll() {

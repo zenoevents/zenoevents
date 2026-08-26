@@ -14,3 +14,17 @@ export function cleanEnv(value: string | undefined): string {
   if (!value) return "";
   return value.replace(/[^\x20-\x7E]/g, "").trim();
 }
+
+/** Same cleaning, but throws a clear message instead of silently sending an
+ *  empty string to Supabase — which otherwise surfaces as a generic
+ *  "Invalid API key" 401 from Supabase itself, with no hint that the actual
+ *  problem is a missing/mis-scoped env var on this deployment. */
+export function requireEnv(name: string, value: string | undefined): string {
+  const cleaned = cleanEnv(value);
+  if (!cleaned) {
+    throw new Error(
+      `Missing environment variable: ${name}. If this is happening on a deployed site, check it's set for the Production environment in Vercel and that you've redeployed since adding it — NEXT_PUBLIC_* vars are baked in at build time, so adding the var alone doesn't fix an already-built deployment.`
+    );
+  }
+  return cleaned;
+}

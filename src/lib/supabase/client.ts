@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { cleanEnv } from "@/lib/env";
+import { requireEnv } from "@/lib/env";
 
 // Singleton — one browser client (and one Realtime websocket) per tab.
 // Callers that used to get a fresh client per call still work identically;
@@ -11,8 +11,8 @@ let client: ReturnType<typeof createBrowserClient> | undefined;
 export function createClient() {
   if (!client) {
     client = createBrowserClient(
-      cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
-      cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+      requireEnv("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
+      requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
     );
   }
   return client;
