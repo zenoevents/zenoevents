@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
 import { getProject, projectFinancials, projectDocuments } from "@/lib/projects";
 import { listInventoryInstances, listReservationsForProject } from "@/lib/inventory-instances";
+import { listPaymentSchedule } from "@/lib/payment-schedule";
 import { PageHeader, PrimaryLink, StatCard, Money, StatusPill, EmptyState, Th, Td, TableCard } from "@/components/ui";
 import { ProjectStatusControl } from "./ProjectStatusControl";
 import { ReserveInventoryPanel } from "./ReserveInventoryPanel";
+import { PaymentSchedulePanel } from "./PaymentSchedulePanel";
 import type { ProjectStatus } from "@/lib/project-status";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +27,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const project = await getProject(projectId);
   if (!project) notFound();
 
-  const [financials, docs, inventoryOptions, itemReservations] = await Promise.all([
+  const [financials, docs, inventoryOptions, itemReservations, milestones] = await Promise.all([
     projectFinancials(projectId),
     projectDocuments(projectId),
     listInventoryInstances(),
     listReservationsForProject(projectId),
+    listPaymentSchedule(projectId),
   ]);
 
   return (
@@ -86,6 +89,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 </tbody>
               </TableCard>
             )}
+          </div>
+
+          <div>
+            <div className="text-[13px] font-semibold mb-2">Payment schedule</div>
+            <PaymentSchedulePanel
+              projectId={project.id}
+              budgetCents={financials.budgetCents}
+              hasClient={!!project.contactId}
+              milestones={milestones}
+            />
           </div>
 
           <div>
