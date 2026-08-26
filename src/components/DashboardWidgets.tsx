@@ -154,9 +154,11 @@ export interface CalEvent {
   deletable?: boolean;
   /** The underlying `events` table row id, needed for deleteEvent() — only set for manual events. */
   dbId?: number;
+  /** Extra detail shown under the title in the selected-day list (venue, status, etc.) */
+  subtitle?: string;
 }
 
-export function CalendarWidget({ events }: { events: CalEvent[] }) {
+export function CalendarWidget({ events, maxPerDay = 2 }: { events: CalEvent[]; maxPerDay?: number }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const today = todayISO();
@@ -240,7 +242,7 @@ export function CalendarWidget({ events }: { events: CalEvent[] }) {
                 {Number(date.slice(8))}
               </span>
               <span className="flex flex-col items-stretch gap-[1px] w-full">
-                {evs.slice(0, 2).map((e) => (
+                {evs.slice(0, maxPerDay).map((e) => (
                   <span
                     key={e.id}
                     className="text-[7.5px] leading-[10px] font-semibold truncate px-[3px] rounded-[3px]"
@@ -249,8 +251,8 @@ export function CalendarWidget({ events }: { events: CalEvent[] }) {
                     {e.title}
                   </span>
                 ))}
-                {evs.length > 2 && (
-                  <span className="text-[7.5px] leading-[10px] text-[var(--color-ink-400)] text-center">+{evs.length - 2}</span>
+                {evs.length > maxPerDay && (
+                  <span className="text-[7.5px] leading-[10px] text-[var(--color-ink-400)] text-center">+{evs.length - maxPerDay}</span>
                 )}
               </span>
             </button>
@@ -267,13 +269,16 @@ export function CalendarWidget({ events }: { events: CalEvent[] }) {
           {selectedEvents.map((e) => (
             <li key={e.id} className="group flex items-center gap-2 text-[12.5px]">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color }} />
-              {e.href ? (
-                <Link href={e.href} className="flex-1 min-w-0 truncate hover:underline" style={{ color: e.color }}>
-                  {e.title}
-                </Link>
-              ) : (
-                <span className="flex-1 min-w-0 truncate">{e.title}</span>
-              )}
+              <span className="flex-1 min-w-0">
+                {e.href ? (
+                  <Link href={e.href} className="block truncate hover:underline" style={{ color: e.color }}>
+                    {e.title}
+                  </Link>
+                ) : (
+                  <span className="block truncate">{e.title}</span>
+                )}
+                {e.subtitle && <span className="block truncate text-[11px] text-[var(--color-ink-400)]">{e.subtitle}</span>}
+              </span>
               {e.deletable && e.dbId != null && (
                 <button
                   onClick={() =>
