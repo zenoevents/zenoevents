@@ -73,7 +73,6 @@ const WHY_US = [
 export function BillingClient({
   status,
   paidUntil,
-  oneTimeFeeCents,
   monthlyFeeCents,
   history,
   orgPhone,
@@ -81,7 +80,6 @@ export function BillingClient({
 }: {
   status: "active" | "locked";
   paidUntil: string;
-  oneTimeFeeCents: number;
   monthlyFeeCents: number;
   history: HistoryRow[];
   orgPhone: string;
@@ -191,14 +189,10 @@ export function BillingClient({
             One Plan. <br className="md:hidden" /> Everything Included.
           </h1>
           <p className="mt-4 text-base text-[var(--color-ink-600)] max-w-2xl mx-auto px-4">
-            No tiers, no feature paywalls, no per-seat charges. Every org gets the full platform — you just pay a simple setup fee once, and a monthly fee to keep it running and improving.
+            No tiers, no feature paywalls, no per-seat charges. Every org gets the full platform for one simple monthly fee that keeps it running and improving.
           </p>
 
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto px-4">
-            <div className="bg-white rounded-2xl border border-[var(--color-ink-100)] shadow-sm px-5 py-4 text-left">
-              <div className="text-[12px] text-[var(--color-ink-500)]">One-time setup fee</div>
-              <div className="text-[24px] font-extrabold mt-1">{fmtKES(oneTimeFeeCents).replace(".00", "")}</div>
-            </div>
+          <div className="mt-8 max-w-xs mx-auto px-4">
             <div className="bg-white rounded-2xl border border-[var(--color-ink-100)] shadow-sm px-5 py-4 text-left">
               <div className="text-[12px] text-[var(--color-ink-500)]">Monthly maintenance</div>
               <div className="text-[24px] font-extrabold mt-1">{fmtKES(monthlyFeeCents).replace(".00", "")}</div>

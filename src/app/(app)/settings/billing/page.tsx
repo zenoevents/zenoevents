@@ -32,7 +32,6 @@ export default async function BillingPage() {
         <BillingClient
           status={access.status}
           paidUntil={access.paidUntil}
-          oneTimeFeeCents={o.oneTimeFeeCents}
           monthlyFeeCents={o.monthlyFeeCents}
           history={history}
           orgPhone={o.phone || ""}
