@@ -1,17 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
-import { getProject, projectFinancials, projectDocuments } from "@/lib/projects";
+import { getProject, projectFinancials, projectDocuments, getProjectMilestones } from "@/lib/projects";
 import { listInventoryInstances, listReservationsForProject } from "@/lib/inventory-instances";
 import { listPaymentSchedule } from "@/lib/payment-schedule";
 import { listDamageReportsForProject } from "@/lib/damage-reports";
 import { listContractsForProject } from "@/lib/contracts";
+import { listProjectFiles } from "@/lib/project-files";
+import { listProjectTasks, listActiveStaff } from "@/lib/project-tasks";
+import { listProjectAuditLog } from "@/lib/audit";
 import { PageHeader, PrimaryLink, StatCard, Money, StatusPill, EmptyState, Th, Td, TableCard } from "@/components/ui";
 import { ProjectStatusControl } from "./ProjectStatusControl";
 import { ReserveInventoryPanel } from "./ReserveInventoryPanel";
 import { PaymentSchedulePanel } from "./PaymentSchedulePanel";
 import { DamageReportPanel } from "./DamageReportPanel";
 import { ContractsPanel } from "./ContractsPanel";
+import { FilesPanel } from "./FilesPanel";
+import { TasksPanel } from "./TasksPanel";
+import { MilestonesPanel } from "./MilestonesPanel";
+import { AuditLogPanel } from "./AuditLogPanel";
 import type { ProjectStatus } from "@/lib/project-status";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +47,10 @@ const TABS = [
   { key: "payments", label: "Payment Schedule", icon: "💳" },
   { key: "damage", label: "Damage Reports", icon: "⚠️" },
   { key: "contracts", label: "Contracts", icon: "📜" },
+  { key: "files", label: "Files", icon: "🗂️" },
+  { key: "tasks", label: "Tasks", icon: "✅" },
+  { key: "milestones", label: "Milestones", icon: "🚀" },
+  { key: "audit", label: "Audit Log", icon: "🕒" },
 ] as const;
 
 function DocTable({ docs }: { docs: { id: number; type: string; number: string; status: string; date: string; totalCents: number }[] }) {
@@ -85,7 +96,7 @@ export default async function ProjectDetailPage({
   const { tab: tabParam } = await searchParams;
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "overview";
 
-  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts] = await Promise.all([
+  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts, files, tasks, staff, timelineEvents, auditRows] = await Promise.all([
     projectFinancials(projectId),
     projectDocuments(projectId),
     listInventoryInstances(),
@@ -93,6 +104,11 @@ export default async function ProjectDetailPage({
     listPaymentSchedule(projectId),
     listDamageReportsForProject(projectId),
     listContractsForProject(projectId),
+    listProjectFiles(projectId),
+    listProjectTasks(projectId),
+    listActiveStaff(),
+    getProjectMilestones(projectId),
+    listProjectAuditLog(projectId),
   ]);
 
   const quoteDocs = docs.filter((d) => d.type === "quote");
@@ -106,6 +122,8 @@ export default async function ProjectDetailPage({
     reservations: itemReservations.filter((r) => r.status !== "cancelled").length,
     payments: milestones.length,
     damage: damageReports.length,
+    files: files.length,
+    tasks: tasks.filter((t) => !t.done).length,
     contracts: contracts.length,
   };
 
@@ -314,6 +332,22 @@ export default async function ProjectDetailPage({
 
         {tab === "contracts" && (
           <ContractsPanel projectId={project.id} contracts={contracts} />
+        )}
+
+        {tab === "files" && (
+          <FilesPanel projectId={project.id} files={files} />
+        )}
+
+        {tab === "tasks" && (
+          <TasksPanel projectId={project.id} tasks={tasks} staff={staff} />
+        )}
+
+        {tab === "milestones" && (
+          <MilestonesPanel events={timelineEvents} />
+        )}
+
+        {tab === "audit" && (
+          <AuditLogPanel rows={auditRows} />
         )}
       </div>
     </>

@@ -1,6 +1,6 @@
 "use server";
 
-import { db, projects, documents, contacts } from "@/db";
+import { db, projects, documents, contacts, paymentSchedule, reservations, inventoryItems, items, contracts } from "@/db";
 import { eq, and, inArray, sql, ne } from "drizzle-orm";
 import { withOrg, currentOrgId } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
@@ -9,6 +9,8 @@ import { logAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ProjectStatus } from "@/lib/project-status";
+import { getManifestForProject } from "@/lib/manifests";
+import { listDamageReportsForProject } from "@/lib/damage-reports";
 
 export async function listProjects() {
   return withOrg(async () => {
@@ -148,7 +150,7 @@ export async function createProjectAction(formData: FormData) {
       createdAt: nowISO(),
     }).returning({ id: projects.id });
 
-    await logAudit({ action: "project.create", module: "projects", recordId: row.id, recordLabel: name });
+    await logAudit({ action: "project.create", module: "projects", recordId: row.id, recordLabel: name, projectId: row.id });
     revalidatePath("/projects");
     redirect(`/projects/${row.id}`);
   });
@@ -162,7 +164,7 @@ export async function updateProjectStatusAction(id: number, status: ProjectStatu
       .where(and(eq(projects.orgId, orgId), eq(projects.id, id))).limit(1);
     if (!row) throw new Error("Project not found");
     await db.update(projects).set({ status }).where(eq(projects.id, id));
-    await logAudit({ action: "project.status", module: "projects", recordId: id, detail: status });
+    await logAudit({ action: "project.status", module: "projects", recordId: id, detail: status, projectId: id });
     revalidatePath("/projects");
     revalidatePath(`/projects/${id}`);
     return { success: true };
@@ -208,5 +210,70 @@ export async function listCustomerContacts() {
       .from(contacts)
       .where(and(eq(contacts.orgId, orgId), inArray(contacts.kind, ["customer", "both"]), eq(contacts.archived, false)))
       .orderBy(contacts.displayName);
+  });
+}
+
+export interface MilestoneEvent {
+  date: string;
+  label: string;
+  icon: string;
+}
+
+/** Read-only, auto-populated timeline — no writes, nothing to break. Merges
+ *  signals already tracked elsewhere (reservations, payment schedule,
+ *  contracts, manifest, damage reports) into one sorted feed instead of
+ *  making staff record milestones by hand. */
+export async function getProjectMilestones(projectId: number): Promise<MilestoneEvent[]> {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const events: MilestoneEvent[] = [];
+
+    const [proj] = await db.select({ createdAt: projects.createdAt, name: projects.name })
+      .from(projects).where(and(eq(projects.orgId, orgId), eq(projects.id, projectId))).limit(1);
+    if (proj) events.push({ date: proj.createdAt, label: "Project created", icon: "🏁" });
+
+    const resRows = await db
+      .select({ startDate: reservations.startDate, createdAt: reservations.createdAt, itemName: items.name, label: inventoryItems.label, status: reservations.status })
+      .from(reservations)
+      .leftJoin(inventoryItems, eq(inventoryItems.id, reservations.inventoryItemId))
+      .leftJoin(items, eq(items.id, inventoryItems.itemId))
+      .where(and(eq(reservations.orgId, orgId), eq(reservations.projectId, projectId), ne(reservations.status, "cancelled")));
+    for (const r of resRows) {
+      events.push({ date: r.createdAt, label: `Reserved ${r.itemName ?? "item"} — ${r.label ?? ""} for ${r.startDate}`, icon: "📦" });
+    }
+
+    const scheduleRows = await db
+      .select({ milestoneName: paymentSchedule.milestoneName, documentId: paymentSchedule.documentId, docStatus: documents.status, docDate: documents.date, docPaidCents: documents.paidCents })
+      .from(paymentSchedule)
+      .leftJoin(documents, eq(documents.id, paymentSchedule.documentId))
+      .where(and(eq(paymentSchedule.orgId, orgId), eq(paymentSchedule.projectId, projectId)));
+    for (const s of scheduleRows) {
+      if (!s.documentId || !s.docDate) continue;
+      events.push({ date: s.docDate, label: `Invoiced — ${s.milestoneName}`, icon: "🧾" });
+      if (s.docPaidCents && s.docPaidCents > 0) {
+        events.push({ date: s.docDate, label: `Payment received — ${s.milestoneName}`, icon: "💰" });
+      }
+    }
+
+    const contractRows = await db.select({ subject: contracts.subject, status: contracts.status, signedAt: contracts.signedAt, createdAt: contracts.createdAt })
+      .from(contracts).where(and(eq(contracts.orgId, orgId), eq(contracts.projectId, projectId)));
+    for (const c of contractRows) {
+      events.push({ date: c.createdAt, label: `Contract drafted — ${c.subject}`, icon: "📜" });
+      if (c.signedAt) events.push({ date: c.signedAt, label: `Contract signed — ${c.subject}`, icon: "✍️" });
+    }
+
+    const manifest = await getManifestForProject(projectId);
+    if (manifest) {
+      events.push({ date: manifest.createdAt, label: "Manifest created", icon: "📋" });
+      if (manifest.confirmedAt) events.push({ date: manifest.confirmedAt, label: "Manifest confirmed — items reserved for dispatch", icon: "✅" });
+      if (manifest.reconciledAt) events.push({ date: manifest.reconciledAt, label: "Manifest reconciled — event closed out", icon: "🏁" });
+    }
+
+    const damageRows = await listDamageReportsForProject(projectId);
+    for (const d of damageRows) {
+      events.push({ date: d.createdAt, label: `Damage reported — ${d.itemName ?? "item"} (${d.damageType})`, icon: "⚠️" });
+    }
+
+    return events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   });
 }

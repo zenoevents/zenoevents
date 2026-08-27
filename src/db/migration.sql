@@ -1087,3 +1087,38 @@ CREATE TABLE IF NOT EXISTS contracts (
 );
 CREATE INDEX IF NOT EXISTS idx_contracts_org_project ON contracts(org_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_contracts_org_status ON contracts(org_id, status);
+
+-- Projects as hub Phase B: Files, Tasks, Milestones, Audit log scoping.
+
+CREATE TABLE IF NOT EXISTS project_files (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  storage_path TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  doc_type TEXT,
+  label TEXT,
+  note TEXT,
+  uploaded_at TEXT NOT NULL,
+  uploaded_by_member_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_files_org_project ON project_files(org_id, project_id);
+
+CREATE TABLE IF NOT EXISTS project_tasks (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  assigned_member_id INTEGER,
+  due_date TEXT,
+  done BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by_member_id INTEGER,
+  created_at TEXT NOT NULL,
+  completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_project_tasks_org_project ON project_tasks(org_id, project_id);
+
+ALTER TABLE org_audit_log ADD COLUMN IF NOT EXISTS project_id INTEGER;
+CREATE INDEX IF NOT EXISTS idx_org_audit_org_project ON org_audit_log(org_id, project_id);

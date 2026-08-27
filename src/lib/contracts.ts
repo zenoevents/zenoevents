@@ -124,7 +124,7 @@ export async function createContractAction(projectId: number, formData: FormData
         createdAt: nowISO(),
       }).returning({ id: contracts.id });
 
-      await logAudit({ action: "contract.create", module: "projects", recordId: row.id, recordLabel: subject });
+      await logAudit({ action: "contract.create", module: "projects", recordId: row.id, recordLabel: subject, projectId });
       revalidatePath(`/projects/${projectId}`);
       return { success: true };
     });
@@ -143,7 +143,7 @@ export async function updateContractStatusAction(id: number, status: Extract<Con
       if (!row) throw new Error("Contract not found");
 
       await db.update(contracts).set({ status }).where(eq(contracts.id, id));
-      await logAudit({ action: "contract.status", module: "projects", recordId: id, detail: status });
+      await logAudit({ action: "contract.status", module: "projects", recordId: id, detail: status, projectId: row.projectId });
       revalidatePath(`/projects/${row.projectId}`);
       return { success: true };
     });
@@ -179,7 +179,7 @@ export async function signContractAction(params: {
         status: "signed",
       }).where(eq(contracts.id, params.id));
 
-      await logAudit({ action: "contract.sign", module: "projects", recordId: params.id, detail: params.signedByName });
+      await logAudit({ action: "contract.sign", module: "projects", recordId: params.id, detail: params.signedByName, projectId: row.projectId });
       revalidatePath(`/projects/${row.projectId}`);
       return { success: true };
     });
@@ -199,7 +199,7 @@ export async function deleteContractAction(id: number): Promise<{ success: true 
       if (row.status !== "draft") throw new Error("Only draft contracts can be deleted");
 
       await db.delete(contracts).where(eq(contracts.id, id));
-      await logAudit({ action: "contract.delete", module: "projects", recordId: id });
+      await logAudit({ action: "contract.delete", module: "projects", recordId: id, projectId: row.projectId });
       revalidatePath(`/projects/${row.projectId}`);
       return { success: true };
     });

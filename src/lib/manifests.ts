@@ -101,7 +101,7 @@ export async function createManifestAction(projectId: number): Promise<{ success
         })));
       }
 
-      await logAudit({ action: "manifest.create", module: "projects", recordId: manifest.id });
+      await logAudit({ action: "manifest.create", module: "projects", recordId: manifest.id, projectId });
       revalidatePath(`/projects/${projectId}`);
       revalidatePath(`/projects/${projectId}/manifest`);
       return { success: true, manifestId: manifest.id };
@@ -188,7 +188,7 @@ export async function advanceLineStatusAction(lineId: number, toStatus: LineStat
         await db.update(manifests).set({ status: "in_progress" }).where(eq(manifests.id, manifest.id));
       }
 
-      await logAudit({ action: "manifest_line.advance", module: "projects", recordId: lineId, detail: toStatus });
+      await logAudit({ action: "manifest_line.advance", module: "projects", recordId: lineId, detail: toStatus, projectId: manifest?.projectId ?? null });
       if (manifest) revalidatePath(`/projects/${manifest.projectId}/manifest`);
       revalidatePath("/manifests");
       return { success: true };
@@ -250,7 +250,7 @@ export async function reconcileManifestAction(manifestId: number): Promise<{ suc
       if (unresolvedDurable) throw new Error("Every durable line needs to be inspected before reconciling");
 
       await db.update(manifests).set({ status: "reconciled", reconciledAt: nowISO() }).where(eq(manifests.id, manifestId));
-      await logAudit({ action: "manifest.reconcile", module: "projects", recordId: manifestId });
+      await logAudit({ action: "manifest.reconcile", module: "projects", recordId: manifestId, projectId: manifest.projectId });
       revalidatePath(`/projects/${manifest.projectId}/manifest`);
       return { success: true };
     });

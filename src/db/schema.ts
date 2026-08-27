@@ -1083,10 +1083,16 @@ export const orgAuditLog = pgTable("org_audit_log", {
   recordId: integer("record_id"),
   recordLabel: text("record_label"), // human label snapshotted at write time, e.g. "INV-0042" — survives the record later being renamed/deleted
   detail: text("detail"),
+  /** Set only at the ~10 events-vertical call sites that have an obvious
+   *  project in scope (reservations, contracts, manifests, payment
+   *  schedule, project status). Null everywhere else — additive, doesn't
+   *  change any existing call site's behavior. */
+  projectId: integer("project_id"),
   createdAt: text("created_at").notNull(),
 }, (t) => ({
   orgCreatedIdx: index("idx_org_audit_org_created").on(t.orgId, t.createdAt),
   orgModuleIdx: index("idx_org_audit_org_module").on(t.orgId, t.module),
+  orgProjectIdx: index("idx_org_audit_org_project").on(t.orgId, t.projectId),
 }));
 
 /** AI assistant chat — history scoped to the Nairobi calendar day; old days are kept (not deleted) but not surfaced by default. */
@@ -1415,6 +1421,44 @@ export const contracts = pgTable("contracts", {
 }, (t) => ({
   orgProjectIdx: index("idx_contracts_org_project").on(t.orgId, t.projectId),
   statusIdx: index("idx_contracts_org_status").on(t.orgId, t.status),
+}));
+
+/** Generic per-project file store — contracts, moodboards, anything. Not
+ *  the contract signature photo or damage photos (those stay single-purpose
+ *  columns on their own tables); this is the catch-all Files tab. */
+export const projectFiles = pgTable("project_files", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  storagePath: text("storage_path").notNull(),
+  filename: text("filename").notNull(),
+  docType: text("doc_type"), // Contract | Moodboard | Invoice | Other — free text, not enforced
+  label: text("label"),
+  note: text("note"),
+  uploadedAt: text("uploaded_at").notNull(), // defaults to today, user-editable
+  uploadedByMemberId: integer("uploaded_by_member_id"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgProjectIdx: index("idx_project_files_org_project").on(t.orgId, t.projectId),
+}));
+
+/** Staff to-dos scoped to one event — site visits, follow-ups, etc.
+ *  Distinct from the org-wide `todos` table (dashboard widget, no project/
+ *  assignee link) and from manifestLines (warehouse checklist, not a task). */
+export const projectTasks = pgTable("project_tasks", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  assignedMemberId: integer("assigned_member_id"),
+  dueDate: text("due_date"),
+  done: boolean("done").notNull().default(false),
+  createdByMemberId: integer("created_by_member_id"),
+  createdAt: text("created_at").notNull(),
+  completedAt: text("completed_at"),
+}, (t) => ({
+  orgProjectIdx: index("idx_project_tasks_org_project").on(t.orgId, t.projectId),
 }));
 
 /** Photo-backed liability record, one per damaged/missing unit. No row can

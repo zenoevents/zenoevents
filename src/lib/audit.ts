@@ -1,6 +1,7 @@
 import { db, orgAuditLog } from "@/db";
 import { and, eq, gte, lte, desc, sql } from "drizzle-orm";
 import { getAccess } from "./access";
+import { withOrg, currentOrgId } from "./org";
 
 export type AuditModule =
   | "contacts" | "quotes" | "invoices" | "credit_notes" | "bills" | "purchase_orders"
@@ -19,6 +20,9 @@ export async function logAudit(params: {
   recordId?: number | null;
   recordLabel?: string | null;
   detail?: string | null;
+  /** Set only when the call site has an obvious project in scope (events
+   *  vertical). Left out everywhere else — purely additive. */
+  projectId?: number | null;
 }) {
   try {
     const access = await getAccess();
@@ -33,6 +37,7 @@ export async function logAudit(params: {
       recordId: params.recordId ?? null,
       recordLabel: params.recordLabel ?? null,
       detail: params.detail ?? null,
+      projectId: params.projectId ?? null,
       createdAt: new Date().toISOString(),
     });
   } catch (e) {
@@ -69,6 +74,21 @@ export async function listAuditLog(orgId: number, filters: AuditFilters, page: n
     db.select({ count: sql<number>`count(*)::int` }).from(orgAuditLog).where(where),
   ]);
   return { rows, total: count };
+}
+
+/** Project-scoped audit trail for the project page's Audit Log tab — no
+ *  admin gate (any project viewer sees it), simple chronological list,
+ *  only rows written with a projectId (the events-vertical call sites). */
+export async function listProjectAuditLog(projectId: number) {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    return db
+      .select()
+      .from(orgAuditLog)
+      .where(and(eq(orgAuditLog.orgId, orgId), eq(orgAuditLog.projectId, projectId)))
+      .orderBy(desc(orgAuditLog.createdAt), desc(orgAuditLog.id))
+      .limit(200);
+  });
 }
 
 /** All actors who have logged an action in this org — for the filter dropdown. */

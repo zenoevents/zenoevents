@@ -215,7 +215,7 @@ export async function createReservationAction(params: {
       eq(inventoryItems.status, "in_store"),
     ));
 
-    await logAudit({ action: "reservation.create", module: "projects", recordId: params.projectId });
+    await logAudit({ action: "reservation.create", module: "projects", recordId: params.projectId, projectId: params.projectId });
     revalidatePath(`/projects/${params.projectId}`);
     revalidatePath("/projects/inventory");
     return { success: true };

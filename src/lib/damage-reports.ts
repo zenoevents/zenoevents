@@ -115,7 +115,7 @@ export async function createDamageReportAction(params: {
         }
       }
 
-      await logAudit({ action: "damage_report.create", module: "projects", recordId: params.inventoryItemId });
+      await logAudit({ action: "damage_report.create", module: "projects", recordId: params.inventoryItemId, projectId: params.projectId ?? null });
       revalidatePath("/projects/damage-reports");
       revalidatePath("/manifests");
       if (params.projectId) revalidatePath(`/projects/${params.projectId}`);
@@ -233,7 +233,7 @@ export async function resolveDamageReportAction(params: {
         resolvedAt: nowISO(),
       }).where(eq(damageReports.id, params.id));
 
-      await logAudit({ action: "damage_report.resolve", module: "projects", recordId: params.id, detail: params.liabilityStatus });
+      await logAudit({ action: "damage_report.resolve", module: "projects", recordId: params.id, detail: params.liabilityStatus, projectId: report.projectId });
       revalidatePath("/projects/damage-reports");
       if (report.projectId) revalidatePath(`/projects/${report.projectId}`);
       return { success: true };

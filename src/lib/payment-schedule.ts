@@ -65,7 +65,7 @@ export async function addMilestoneAction(projectId: number, formData: FormData) 
       createdAt: nowISO(),
     });
 
-    await logAudit({ action: "payment_schedule.create", module: "projects", recordLabel: milestoneName });
+    await logAudit({ action: "payment_schedule.create", module: "projects", recordLabel: milestoneName, projectId });
     revalidatePath(`/projects/${projectId}`);
     return { success: true };
   });
@@ -141,7 +141,7 @@ export async function generateInvoiceForMilestoneAction(id: number) {
     await db.update(documents).set({ projectId: row.projectId }).where(eq(documents.id, result.id));
     await db.update(paymentSchedule).set({ documentId: result.id }).where(eq(paymentSchedule.id, id));
 
-    await logAudit({ action: "payment_schedule.invoice", module: "projects", recordId: result.id, detail: row.milestoneName });
+    await logAudit({ action: "payment_schedule.invoice", module: "projects", recordId: result.id, detail: row.milestoneName, projectId: row.projectId });
     revalidatePath(`/projects/${row.projectId}`);
     revalidatePath("/sales/invoices");
     return { success: true, documentId: result.id };
