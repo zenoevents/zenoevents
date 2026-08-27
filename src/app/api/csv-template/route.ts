@@ -24,12 +24,19 @@ const templates: Record<string, string[][]> = {
   ["INV-A", "Acme Distributors Ltd", "2026-07-01", "2026-07-31", "Branded T-Shirt", "20", "1200.00", "5", "B16"],
   ["INV-B", "Jengo Hardware", "2026-07-02", "", "Delivery service", "1", "3500.00", "0", "B16"],
   ],
+  inventory: [
+    ["item_name", "label", "qty", "condition", "warehouse", "sku", "unit", "selling_price", "buying_cost", "vat_class"],
+    ["Chiavari Chair", "Chiavari Chairs — Gold (Batch A)", "100", "good", "Main Warehouse", "CHR-GLD", "pc", "0", "1500.00", "B16"],
+    ["Round Table 10-seater", "Round Tables 10ft", "15", "good", "Main Warehouse", "TBL-10", "pc", "0", "8000.00", "B16"],
+    ["PA Speaker System", "PA System — Set 1", "2", "fair", "AV Store", "", "set", "0", "45000.00", "B16"],
+  ],
 };
 
 const notes: Record<string, string> = {
   contacts: "# kind: customer | vendor | both. Name required; duplicates (same name) are skipped. groups: comma-separated customer group names (e.g. Wholesale, Key Accounts).",
   items: "# type: service | goods | unproduced, or any custom type set up under Items > Item types. group: item group name (created automatically if missing; required when the org enforces item groups and the type requires one). vat_class: B16 (16%) | C0 (zero-rated) | A_EXEMPT | D_NONVAT. track_stock: yes | no. Prices in KSh. opening_qty: starting stock on hand, valued at buying_cost (only used when track_stock is yes).",
   invoices: "# Rows with the same invoice_ref become ONE invoice (multi-line). Imported as DRAFTS — review and issue in the app. Dates YYYY-MM-DD. Prices in KSh before VAT.",
+  inventory: "# item_name: matched against Items & Stock by name (case-insensitive) — reused if found, created automatically if not (as a non-tracked rental item; selling_price/buying_cost/sku/unit/vat_class are only used when creating a new item). label: this batch's own label (e.g. \"Chiavari Chairs — Gold (Batch A)\"). qty: units in this batch. condition: good | fair | poor | damaged. warehouse: created automatically if missing, leave blank for unassigned.",
 };
 
 export async function GET(req: NextRequest) {

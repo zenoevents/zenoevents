@@ -1,7 +1,7 @@
 "use server";
 
-import { db, contacts, items, customerGroups, contactGroupMemberships, itemGroups, itemTypes } from "@/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { db, contacts, items, customerGroups, contactGroupMemberships, itemGroups, itemTypes, inventoryItems, warehouses } from "@/db";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { revalidatePath as nextRevalidatePath } from "next/cache";
 
 /** revalidatePath, but safe when called outside a Next request (scripts, tests). */
@@ -14,7 +14,7 @@ function revalidatePath(path: string) {
 }
 import { withOrg, currentOrgId, getOrg } from "./org";
 import { nowISO, todayISO } from "./money";
-import { saveDocument, type DocLineInput } from "./actions";
+import { saveDocument, saveItem, type DocLineInput } from "./actions";
 import type { TaxClass } from "./tax";
 import { addLot } from "./inventory";
 import { postEntry, acct } from "./posting";
@@ -300,5 +300,97 @@ export async function importInvoices(rows: InvoiceRow[]): Promise<{ created?: nu
   });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to import invoices" };
+  }
+}
+
+export interface InventoryRow {
+  itemName: string; // matched against Items & Stock by name; created if missing
+  label: string;
+  qty: number;
+  condition?: string;
+  warehouse?: string;
+  // Used only when itemName doesn't match an existing catalog item —
+  // creates it the same way the inline "New catalog item" flow does
+  // (trackInventory: false, same rental-gear defaults).
+  sku?: string;
+  unit?: string;
+  salePriceCents?: number;
+  purchaseCostCents?: number;
+  taxClass?: string;
+}
+
+const VALID_CONDITION = ["good", "fair", "poor", "damaged"];
+
+/**
+ * Bulk-creates Event Inventory batches. Rows connect straight into Items &
+ * Stock: an itemName that matches an existing catalog item reuses it as-is
+ * (no accounting fields touched); an unmatched name creates a new catalog
+ * item on the fly with the same rental-gear defaults the inline "New
+ * catalog item" form uses (trackInventory: false — see
+ * createInventoryItemWithCatalogAction in inventory-instances.ts).
+ */
+export async function importInventory(rows: InventoryRow[]): Promise<{ created?: number; skipped?: number; error?: string }> {
+  try {
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const existingItems = await db.select({ id: items.id, name: items.name })
+        .from(items)
+        .where(and(eq(items.orgId, orgId), eq(items.archived, false), ne(sql`lower(${items.kind})`, "service")));
+      const itemByName = new Map(existingItems.map((i) => [i.name.toLowerCase().trim(), i.id]));
+
+      const existingWarehouses = await db.select({ id: warehouses.id, name: warehouses.name })
+        .from(warehouses).where(eq(warehouses.orgId, orgId));
+      const warehouseByName = new Map(existingWarehouses.map((w) => [w.name.toLowerCase().trim(), w.id]));
+
+      let created = 0, skipped = 0;
+      for (const r of rows) {
+        const itemName = (r.itemName || "").trim();
+        const label = (r.label || "").trim();
+        const qty = Number(r.qty) || 0;
+        if (!itemName || !label || qty <= 0) { skipped++; continue; }
+
+        let itemId = itemByName.get(itemName.toLowerCase());
+        if (!itemId) {
+          itemId = await saveItem({
+            kind: "goods",
+            itemGroupId: null,
+            name: itemName,
+            sku: r.sku || undefined,
+            unit: r.unit || "unit",
+            salePriceCents: Math.max(0, Math.round(r.salePriceCents ?? 0)),
+            purchaseCostCents: Math.max(0, Math.round(r.purchaseCostCents ?? 0)),
+            taxClass: VALID_TAX.includes(r.taxClass || "") ? r.taxClass! : "B16",
+            trackInventory: false,
+            reorderLevel: 0,
+          });
+          itemByName.set(itemName.toLowerCase(), itemId);
+        }
+
+        let warehouseId: number | null = null;
+        const warehouseName = (r.warehouse || "").trim();
+        if (warehouseName) {
+          warehouseId = warehouseByName.get(warehouseName.toLowerCase()) ?? null;
+          if (!warehouseId) {
+            const [w] = await db.insert(warehouses).values({ orgId, name: warehouseName, createdAt: nowISO() }).returning();
+            warehouseId = w.id;
+            warehouseByName.set(warehouseName.toLowerCase(), w.id);
+          }
+        }
+
+        await db.insert(inventoryItems).values({
+          orgId, itemId, label, qty, warehouseId,
+          condition: VALID_CONDITION.includes(r.condition || "") ? r.condition! : "good",
+          status: "in_store",
+          createdAt: nowISO(),
+        });
+        await logAudit({ action: "inventory_item.create", module: "projects", recordLabel: label, detail: "Auto-created via CSV import" });
+        created++;
+      }
+      revalidatePath("/projects/inventory");
+      revalidatePath("/items");
+      return { created, skipped };
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to import inventory" };
   }
 }

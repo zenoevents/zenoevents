@@ -7,9 +7,11 @@ import {
   importContacts,
   importItems,
   importInvoices,
+  importInventory,
   type ContactRow,
   type ItemRow,
   type InvoiceRow,
+  type InventoryRow,
 } from "@/lib/import-actions";
 
 /**
@@ -41,7 +43,7 @@ function indexHeaders(header: string[]) {
 
 const yes = (v: string) => ["yes", "y", "true", "1"].includes((v || "").toLowerCase());
 
-type Entity = "contacts" | "items" | "invoices";
+type Entity = "contacts" | "items" | "invoices" | "inventory";
 
 export function CsvImporter({ entity, label }: { entity: Entity; label: string }) {
   const router = useRouter();
@@ -94,6 +96,24 @@ export function CsvImporter({ entity, label }: { entity: Entity; label: string }
           openingQty: Number(r[iOpening]) || 0,
         })).filter((r) => r.name);
         setPreview({ count: rows.length, sample: rows.slice(0, 5).map((r) => r.name), rows });
+      } else if (entity === "inventory") {
+        const iItem = idx("item_name", "item", "catalog_item"), iLabel = idx("label", "batch", "batch_label"),
+          iQty = idx("qty", "quantity"), iCond = idx("condition"), iWh = idx("warehouse"),
+          iSku = idx("sku"), iUnit = idx("unit"), iSell = idx("selling_price", "sale_price", "price"),
+          iBuy = idx("buying_cost", "purchase_cost", "cost"), iVat = idx("vat_class", "tax_class");
+        if (iItem < 0 || iLabel < 0) throw new Error('Missing "item_name" / "label" columns — download the template.');
+        const rows: InventoryRow[] = body.map((r) => ({
+          itemName: r[iItem] ?? "",
+          label: r[iLabel] ?? "",
+          qty: Number(r[iQty]) || 0,
+          condition: r[iCond],
+          warehouse: r[iWh],
+          sku: r[iSku], unit: r[iUnit],
+          salePriceCents: parseKES(r[iSell] ?? "") || 0,
+          purchaseCostCents: parseKES(r[iBuy] ?? "") || 0,
+          taxClass: r[iVat] || "B16",
+        })).filter((r) => r.itemName && r.label && r.qty > 0);
+        setPreview({ count: rows.length, sample: rows.slice(0, 5).map((r) => `${r.label} (${r.itemName} × ${r.qty})`), rows });
       } else {
         const iRef = idx("invoice_ref", "ref", "number"), iCust = idx("customer_name", "customer"),
           iDate = idx("date"), iDue = idx("due_date"), iDesc = idx("description", "item"),
@@ -128,6 +148,7 @@ export function CsvImporter({ entity, label }: { entity: Entity; label: string }
         let res: { created?: number; skipped?: number; error?: string };
         if (entity === "contacts") res = await importContacts(preview.rows as ContactRow[]);
         else if (entity === "items") res = await importItems(preview.rows as ItemRow[]);
+        else if (entity === "inventory") res = await importInventory(preview.rows as InventoryRow[]);
         else res = await importInvoices(preview.rows as InvoiceRow[]);
         
         if (res.error) {
@@ -136,7 +157,7 @@ export function CsvImporter({ entity, label }: { entity: Entity; label: string }
         }
         
         setResult(
-          `✓ Imported ${res.created} ${entity === "invoices" ? "draft invoice(s)" : entity}` +
+          `✓ Imported ${res.created} ${entity === "invoices" ? "draft invoice(s)" : entity === "inventory" ? "inventory batch(es)" : entity}` +
           (res.skipped ? ` · ${res.skipped} skipped (duplicates/empty)` : "")
         );
         setPreview(null);

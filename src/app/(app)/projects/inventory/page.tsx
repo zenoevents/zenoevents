@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePerm } from "@/lib/guard";
 import { listInventoryInstances } from "@/lib/inventory-instances";
 import { PageHeader, PrimaryLink, EmptyState, Th, Td, TableCard } from "@/components/ui";
+import { CsvImporter } from "@/components/CsvImporter";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,12 @@ export default async function InventoryInstancesPage({
       <PageHeader
         title="Event Inventory"
         subtitle="Durable, rentable gear tracked by unit or labeled batch — where it is, not just how many."
-        action={<PrimaryLink href="/projects/inventory/new">+ New item</PrimaryLink>}
+        action={
+          <div className="flex items-center gap-2">
+            <CsvImporter entity="inventory" label="Bulk import inventory" />
+            <PrimaryLink href="/projects/inventory/new">+ New item</PrimaryLink>
+          </div>
+        }
       />
       {itemId && (
         <div className="mb-4 flex items-center gap-2 text-[13px]">
