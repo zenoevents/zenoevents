@@ -28,12 +28,14 @@ export function ItemsTable({
   groupNames,
   groupsRequired,
   groups,
+  rentalUnitCounts,
 }: {
   rows: ItemRow[];
   stock: Record<number, { qty: number; value: number }>;
   groupNames?: Record<number, string>;
   groupsRequired?: boolean;
   groups?: Array<{ id: number; name: string }>;
+  rentalUnitCounts?: Record<number, number>;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -164,6 +166,14 @@ export function ItemsTable({
                   <span className="font-medium">{it.name}</span>
                   {it.sku && <span className="text-[var(--color-ink-400)]"> · {it.sku}</span>}
                   <div className="text-[11px] text-[var(--color-ink-400)] capitalize">{it.kind}</div>
+                  {!!rentalUnitCounts?.[it.id] && (
+                    <Link
+                      href={`/projects/inventory?item=${it.id}`}
+                      className="inline-block mt-1 rounded-full bg-[var(--color-accent-50)] text-[var(--color-accent-700)] text-[10.5px] font-medium px-2 py-0.5 hover:underline"
+                    >
+                      🎪 {rentalUnitCounts[it.id]} rental unit{rentalUnitCounts[it.id] === 1 ? "" : "s"}
+                    </Link>
+                  )}
                 </Td>
                 <Td className="text-[var(--color-ink-600)]">
                   {it.itemGroupId && groupNames?.[it.itemGroupId]

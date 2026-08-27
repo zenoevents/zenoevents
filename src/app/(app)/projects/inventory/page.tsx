@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePerm } from "@/lib/guard";
 import { listInventoryInstances } from "@/lib/inventory-instances";
 import { PageHeader, PrimaryLink, EmptyState, Th, Td, TableCard } from "@/components/ui";
@@ -32,9 +33,17 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default async function InventoryInstancesPage() {
+export default async function InventoryInstancesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ item?: string }>;
+}) {
   await requirePerm("projects");
-  const rows = await listInventoryInstances();
+  const { item: itemParam } = await searchParams;
+  const itemId = itemParam && /^\d+$/.test(itemParam) ? Number(itemParam) : null;
+  const allRows = await listInventoryInstances();
+  const rows = itemId ? allRows.filter((r) => r.itemId === itemId) : allRows;
+  const filteredItemName = itemId ? rows[0]?.itemName ?? null : null;
 
   return (
     <>
@@ -43,6 +52,12 @@ export default async function InventoryInstancesPage() {
         subtitle="Durable, rentable gear tracked by unit or labeled batch — where it is, not just how many."
         action={<PrimaryLink href="/projects/inventory/new">+ New item</PrimaryLink>}
       />
+      {itemId && (
+        <div className="mb-4 flex items-center gap-2 text-[13px]">
+          <span className="text-[var(--color-ink-500)]">Showing only{filteredItemName ? ` "${filteredItemName}"` : ""}</span>
+          <Link href="/projects/inventory" className="text-[var(--color-accent-600)] font-medium hover:underline">Clear filter</Link>
+        </div>
+      )}
       {rows.length === 0 ? (
         <EmptyState
           title="No tracked inventory yet"

@@ -20,12 +20,15 @@ const groups: {
     ],
   },
   {
-    label: "Projects",
+    label: "Projects & Inventory",
     items: [
       { href: "/projects", label: "Projects", icon: "🎪", perm: "projects" },
       { href: "/projects/inventory", label: "Event Inventory", icon: "🪑", perm: "projects" },
       { href: "/projects/damage-reports", label: "Damage Reports", icon: "📸", perm: "projects" },
       { href: "/manifests", label: "My Tasks", icon: "✅", perm: "manifests" },
+      { href: "/items", label: "Items & Stock", icon: "📦", perm: "items" },
+      { href: "/items/warehouses", label: "Warehouses", icon: "🏬", perm: "items" },
+      { href: "/items/transfers", label: "Stock Transfers", icon: "🔄", perm: "items" },
     ],
   },
   {
@@ -50,9 +53,6 @@ const groups: {
       { href: "/purchases/orders", label: "Purchase Orders", icon: "📦", perm: "purchase_orders" },
       { href: "/purchases/payment-runs", label: "Payment Runs", icon: "🏃", perm: "bills" },
       { href: "/purchases/payouts", label: "Stuck Payouts", icon: "⚠️", perm: "can_payout" },
-      { href: "/items", label: "Items & Stock", icon: "📦", perm: "items" },
-      { href: "/items/warehouses", label: "Warehouses", icon: "🏬", perm: "items" },
-      { href: "/items/transfers", label: "Stock Transfers", icon: "🔄", perm: "items" },
     ],
   },
   {

@@ -34,13 +34,35 @@ export async function listInventoryInstances() {
   });
 }
 
+/** Every non-archived item except the built-in "service" kind — a service
+ *  can never be a physical rental unit. `kind` is an org-customizable
+ *  taxonomy label (see item-types.ts), not used in accounting logic, so
+ *  this exclusion is purely a UX guard against picking the wrong item —
+ *  custom org-defined kinds are left alone since their semantics aren't
+ *  knowable generically. */
 export async function listCatalogItems() {
   return withOrg(async () => {
     const orgId = currentOrgId();
     return db.select({ id: items.id, name: items.name })
       .from(items)
-      .where(and(eq(items.orgId, orgId), eq(items.archived, false)))
+      .where(and(eq(items.orgId, orgId), eq(items.archived, false), ne(sql`lower(${items.kind})`, "service")))
       .orderBy(items.name);
+  });
+}
+
+/** How many Event Inventory instances exist per catalog item — the cross-
+ *  link the Items & Stock list shows ("N rental units"), so a client
+ *  browsing the catalog can see the other half of the same item instead of
+ *  the two screens looking unrelated. */
+export async function countInventoryInstancesByItem(): Promise<Record<number, number>> {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const rows = await db
+      .select({ itemId: inventoryItems.itemId, count: sql<number>`count(*)`.mapWith(Number) })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.orgId, orgId))
+      .groupBy(inventoryItems.itemId);
+    return Object.fromEntries(rows.map((r) => [r.itemId, r.count]));
   });
 }
 

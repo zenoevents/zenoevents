@@ -18,8 +18,17 @@ const input =
   "w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)] focus:ring-2 focus:ring-[var(--color-accent-100)] mt-1";
 const label = "text-[12px] font-medium text-[var(--color-ink-600)]";
 
-export default async function NewItemPage() {
+export default async function NewItemPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string }>;
+}) {
   await requirePerm("items");
+  const { returnTo } = await searchParams;
+  // Only ever an internal path (set by our own "add the item you're missing"
+  // links, e.g. from Event Inventory's New item page) — never trust an
+  // external redirect target from a query param.
+  const safeReturnTo = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/items";
   const [o, groups, types] = await Promise.all([getOrg(), listItemGroups(), listItemTypes()]);
   const expenseAccounts = await db
     .select({ id: accounts.id, code: accounts.code, name: accounts.name })
@@ -46,7 +55,7 @@ export default async function NewItemPage() {
       measurementType: (formData.get("measurementType") || null) as "length" | "area" | null,
       purchaseAccountId: formData.get("purchaseAccountId") ? Number(formData.get("purchaseAccountId")) : null,
     });
-    redirect("/items");
+    redirect(safeReturnTo);
   }
 
   return (
@@ -139,7 +148,7 @@ export default async function NewItemPage() {
           <button className="rounded-lg bg-[var(--color-accent-500)] hover:bg-[var(--color-accent-600)] disabled:opacity-60 text-white text-[13px] font-medium px-5 py-2.5">
             Save item
           </button>
-          <a href="/items" className="text-[13px] text-[var(--color-ink-400)] self-center">Cancel</a>
+          <a href={safeReturnTo} className="text-[13px] text-[var(--color-ink-400)] self-center">Cancel</a>
         </div>
       </form>
     </>

@@ -5,6 +5,7 @@ import { getAccess } from "@/lib/access";
 import { db, items } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { stockOnHand, stockValueCents } from "@/lib/inventory";
+import { countInventoryInstancesByItem } from "@/lib/inventory-instances";
 import { PageHeader, PrimaryLink, EmptyState } from "@/components/ui";
 import { CsvImporter } from "@/components/CsvImporter";
 import { ItemsTable } from "@/components/ItemsTable";
@@ -22,6 +23,7 @@ export default async function ItemsPage() {
   const rows = await db.select().from(items).where(and(eq(items.orgId, o.id), eq(items.archived, false)));
   const groups = await listItemGroups();
   const groupNames = Object.fromEntries(groups.map((g) => [g.id, g.name]));
+  const rentalUnitCounts = await withOrg(() => countInventoryInstancesByItem());
   const stock: Record<number, { qty: number; value: number }> = {};
   await Promise.all(
     rows
@@ -89,6 +91,7 @@ export default async function ItemsPage() {
             groupNames={groupNames}
             groupsRequired={o.itemGroupsEnabled}
             groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+            rentalUnitCounts={rentalUnitCounts}
           />
         </>
       )}

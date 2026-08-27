@@ -30,10 +30,18 @@ export default async function NewInventoryInstancePage() {
             <option value="" disabled>Select an item…</option>
             {catalogItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
-          {catalogItems.length === 0 && (
+          {catalogItems.length === 0 ? (
             <p className="text-[11px] text-[var(--color-bad)] mt-1">
-              No catalog items yet — add one under Items &amp; Stock first (e.g. "Chiavari Chair").
+              No catalog items yet —{" "}
+              <a href="/items/new?returnTo=/projects/inventory/new" className="underline font-medium">
+                create one now
+              </a>{" "}
+              (e.g. "Chiavari Chair"), you'll land right back here.
             </p>
+          ) : (
+            <a href="/items/new?returnTo=/projects/inventory/new" className="inline-block text-[11.5px] text-[var(--color-accent-600)] hover:underline mt-1">
+              + New catalog item
+            </a>
           )}
         </label>
 
