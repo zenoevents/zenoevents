@@ -38,11 +38,11 @@ export function IncomeExpenseChart({ data }: { data: { month: string; label: str
   }));
 
   if (!mounted) {
-    return <div className="h-64 w-full bg-[var(--color-ink-50)]/40 rounded-lg animate-pulse" />;
+    return <div className="flex-1 min-h-64 w-full bg-[var(--color-ink-50)]/40 rounded-lg animate-pulse" />;
   }
 
   return (
-    <div className="h-64 w-full">
+    <div className="flex-1 min-h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={formattedData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e5ea" />

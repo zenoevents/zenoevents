@@ -115,8 +115,10 @@ export default async function ReportsPage() {
           </Link>
         </div>
 
-        {/* Chart */}
-        <div className="lg:col-span-2 card p-5">
+        {/* Chart — flex column so the chart fills the card's full stretched
+            height (matches the taller stacked-metrics column beside it)
+            instead of sitting height-locked in a mostly-blank card. */}
+        <div className="lg:col-span-2 card p-5 flex flex-col">
           <h2 className="text-[14px] font-semibold mb-4">Income vs Expense (6 Months)</h2>
           <IncomeExpenseChart data={incomeExpenseData} />
         </div>
