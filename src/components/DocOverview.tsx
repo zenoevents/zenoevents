@@ -2,39 +2,10 @@ import Link from "next/link";
 import { fmtKES } from "@/lib/money";
 
 /**
- * Invoice & quote status overview — counts, share bars, money totals.
+ * Invoice & quote status overview — one segmented bar per doc type instead
+ * of five separate progress rows, plus money totals below.
  * Server component; data from reports.docStatusOverview.
  */
-
-function Row({
-  count,
-  label,
-  total,
-  color,
-  href,
-}: {
-  count: number;
-  label: string;
-  total: number;
-  color: string;
-  href: string;
-}) {
-  const pct = total > 0 ? (count / total) * 100 : 0;
-  return (
-    <Link href={href} className="block group py-1.5">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[13px]">
-          <span className="font-semibold tnum" style={{ color }}>{count}</span>{" "}
-          <span className="text-[var(--color-ink-600)] group-hover:text-[var(--color-ink-900)]">{label}</span>
-        </span>
-        <span className="text-[11.5px] text-[var(--color-ink-400)] tnum">{pct.toFixed(1)}%</span>
-      </div>
-      <div className="mt-1 h-[5px] rounded-full bg-[var(--color-ink-100)] overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, count > 0 ? 2 : 0)}%`, background: color }} />
-      </div>
-    </Link>
-  );
-}
 
 const C = {
   gray: "#86868b",
@@ -44,6 +15,39 @@ const C = {
   amber: "#b8860b",
   green: "#1f8a4c",
 };
+
+function SegmentedBar({ title, segments, total, hrefBase }: {
+  title: string;
+  segments: { key: string; label: string; count: number; color: string }[];
+  total: number;
+  hrefBase: string;
+}) {
+  return (
+    <div>
+      <div className="text-[13.5px] font-semibold mb-2">{title}</div>
+      <div className="h-3 rounded-full bg-[var(--color-ink-100)] overflow-hidden flex">
+        {segments.filter((s) => s.count > 0).map((s) => (
+          <Link
+            key={s.key}
+            href={`${hrefBase}?status=${s.key}`}
+            title={`${s.label}: ${s.count}`}
+            className="h-full transition-opacity hover:opacity-80"
+            style={{ width: `${total > 0 ? (s.count / total) * 100 : 0}%`, background: s.color }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2.5">
+        {segments.map((s) => (
+          <Link key={s.key} href={`${hrefBase}?status=${s.key}`} className="flex items-center gap-1.5 text-[12px] group">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+            <span className="font-semibold tnum" style={{ color: s.color }}>{s.count}</span>
+            <span className="text-[var(--color-ink-600)] group-hover:text-[var(--color-ink-900)]">{s.label}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function DocOverview({
   data,
@@ -67,21 +71,29 @@ export function DocOverview({
   return (
     <div className="card p-5">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-        <div>
-          <div className="text-[13.5px] font-semibold mb-2">Invoice overview</div>
-          <Row count={data.inv.draft} label="Draft" total={data.invTotal} color={C.gray} href="/sales/invoices?status=draft" />
-          <Row count={data.inv.open} label="Awaiting payment" total={data.invTotal} color={C.blue} href="/sales/invoices?status=open" />
-          <Row count={data.inv.partial} label="Partially paid" total={data.invTotal} color={C.amber} href="/sales/invoices?status=partial" />
-          <Row count={data.inv.overdue} label="Overdue" total={data.invTotal} color={C.red} href="/sales/invoices?status=overdue" />
-          <Row count={data.inv.paid} label="Paid" total={data.invTotal} color={C.green} href="/sales/invoices?status=paid" />
-        </div>
-        <div>
-          <div className="text-[13.5px] font-semibold mb-2">Quote overview</div>
-          <Row count={data.qt.draft} label="Draft" total={data.qtTotal} color={C.gray} href="/sales/quotes?status=draft" />
-          <Row count={data.qt.open} label="Sent" total={data.qtTotal} color={C.blue} href="/sales/quotes?status=open" />
-          <Row count={data.qt.accepted} label="Accepted" total={data.qtTotal} color={C.green} href="/sales/quotes?status=accepted" />
-          <Row count={data.qt.declined} label="Declined" total={data.qtTotal} color={C.red} href="/sales/quotes?status=declined" />
-        </div>
+        <SegmentedBar
+          title="Invoice overview"
+          total={data.invTotal}
+          hrefBase="/sales/invoices"
+          segments={[
+            { key: "draft", label: "Draft", count: data.inv.draft, color: C.gray },
+            { key: "open", label: "Awaiting payment", count: data.inv.open, color: C.blue },
+            { key: "partial", label: "Partially paid", count: data.inv.partial, color: C.amber },
+            { key: "overdue", label: "Overdue", count: data.inv.overdue, color: C.red },
+            { key: "paid", label: "Paid", count: data.inv.paid, color: C.green },
+          ]}
+        />
+        <SegmentedBar
+          title="Quote overview"
+          total={data.qtTotal}
+          hrefBase="/sales/quotes"
+          segments={[
+            { key: "draft", label: "Draft", count: data.qt.draft, color: C.gray },
+            { key: "open", label: "Sent", count: data.qt.open, color: C.blue },
+            { key: "accepted", label: "Accepted", count: data.qt.accepted, color: C.green },
+            { key: "declined", label: "Declined", count: data.qt.declined, color: C.red },
+          ]}
+        />
       </div>
 
       {showBreakdown && (

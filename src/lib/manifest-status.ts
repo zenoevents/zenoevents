@@ -18,6 +18,18 @@ export const LINE_STATUSES = [
 ] as const;
 export type LineStatus = (typeof LINE_STATUSES)[number];
 
+/** Collapses a granular line status into one of the five post-confirmation
+ *  lifecycle buckets — shared by the per-project Overview stepper
+ *  (src/lib/projects.ts) and the org-wide manifest pipeline widget on the
+ *  home dashboard, so both read the same "how far along" definition. */
+export function lineFloorStage(status: string): "packing" | "loaded" | "dispatched" | "returned" | "inspected" {
+  if (status.startsWith("inspected_")) return "inspected";
+  if (status === "returned" || status === "collected") return "returned";
+  if (status === "dispatched") return "dispatched";
+  if (status === "loaded") return "loaded";
+  return "packing"; // pending | picked
+}
+
 /** Which role is expected to perform each forward transition — used to
  *  gate the action buttons a given staff member sees, not just cosmetic. */
 export const LINE_TRANSITIONS: Record<string, { to: LineStatus; role: "warehouse_staff" | "loading_staff" | "collection_staff"; label: string }[]> = {

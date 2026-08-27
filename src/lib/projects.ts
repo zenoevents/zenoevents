@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 import type { ProjectStatus } from "@/lib/project-status";
 import { getManifestForProject } from "@/lib/manifests";
 import { listDamageReportsForProject } from "@/lib/damage-reports";
-import { LINE_STATUSES } from "@/lib/manifest-status";
+import { LINE_STATUSES, lineFloorStage } from "@/lib/manifest-status";
 import { damageReports } from "@/db";
 import { type LifecycleStage } from "@/lib/lifecycle-stage";
 
@@ -307,14 +307,6 @@ export async function getProjectMilestones(projectId: number): Promise<Milestone
 
     return events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   });
-}
-
-function lineFloorStage(status: string): LifecycleStage {
-  if (status.startsWith("inspected_")) return "inspected";
-  if (status === "returned" || status === "collected") return "returned";
-  if (status === "dispatched") return "dispatched";
-  if (status === "loaded") return "loaded";
-  return "packing"; // pending | picked
 }
 
 /** Read-only aggregates for the Overview dashboard — a synthetic lifecycle

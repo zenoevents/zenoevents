@@ -10,10 +10,15 @@ import { IncomeExpenseChart, TodoWidget, CalendarWidget } from "@/components/Das
 import { DocOverview } from "@/components/DocOverview";
 import { TimeTrackingCard } from "@/components/TimeTrackingCard";
 import { getActiveShift } from "@/lib/time-tracking";
-import { upcomingEventsStrip, unpaidMilestoneRisks, pendingDamageCount, manifestPipelineCounts, projectPipelineCounts, warehouseSummary } from "@/lib/dashboard-events";
+import {
+  upcomingEventsStrip, unpaidMilestoneRisks, pendingDamageCount, projectPipelineCounts, warehouseSummary,
+  manifestPipelineStageCounts, pendingDamageReportsFeed, stuckCleaningItems, lowStockItems, upcomingManifestDeadlines, monthlyEventCounts,
+} from "@/lib/dashboard-events";
+import { getDamagePhotoUrlAction } from "@/lib/damage-reports";
 import { listMyManifestTasks } from "@/lib/manifests";
-import { ThisWeeksEvents, UnpaidMilestoneRisks, OpsSummaryRow, SalesPipelineFunnel } from "@/components/EventsDashboardWidgets";
+import { ThisWeeksEvents, UnpaidMilestoneRisks, ManifestPipelineBar, DamageReportsFeed, OpsAlertStrip, UpcomingManifestDeadlines, SalesPipelineFunnel } from "@/components/EventsDashboardWidgets";
 import { OperationalDashboard } from "@/components/OperationalDashboard";
+import { MoneyOverview } from "@/components/MoneyOverview";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +101,11 @@ export default async function Dashboard({
     }
 
     // All independent — fire in parallel
-    const [stats, memberStats, chartData, overview, activeShift, recentDocs, todoRows, eventRows, dueDocs, recurringRows, weekEvents, milestoneRisks, damageCount, manifestCounts, pipelineCounts, calendarProjects] =
+    const [
+      stats, memberStats, chartData, overview, activeShift, recentDocs, todoRows, eventRows, dueDocs, recurringRows,
+      weekEvents, milestoneRisks, damageCount, pipelineStageCounts, pipelineCounts, calendarProjects,
+      damageFeed, stuckCleaning, lowStock, manifestDeadlines, eventCounts,
+    ] =
       await Promise.all([
         ownOnly ? Promise.resolve(null) : dashboardStats(today),
         ownOnly ? memberDashboardStats(access!.memberId!, today) : Promise.resolve(null),
@@ -127,7 +136,7 @@ export default async function Dashboard({
         showEvents ? upcomingEventsStrip(7) : Promise.resolve([]),
         showEvents && isOwnerOrAdmin ? unpaidMilestoneRisks(14) : Promise.resolve([]),
         showEvents && isOwnerOrAdmin ? pendingDamageCount() : Promise.resolve(0),
-        showEvents && isOwnerOrAdmin ? manifestPipelineCounts() : Promise.resolve({}),
+        showEvents && isOwnerOrAdmin ? manifestPipelineStageCounts() : Promise.resolve({}),
         showEvents && access?.role === "sales" ? projectPipelineCounts() : Promise.resolve({}),
         // Every non-cancelled project's event date, for the calendar — the whole
         // point of an events business is seeing every booked date at a glance.
@@ -138,7 +147,19 @@ export default async function Dashboard({
               .leftJoin(contacts, eq(contacts.id, projects.contactId))
               .where(and(eq(projects.orgId, o.id), ne(projects.status, "cancelled")))
           : Promise.resolve([]),
+        showEvents && isOwnerOrAdmin ? pendingDamageReportsFeed(3) : Promise.resolve([]),
+        showEvents && isOwnerOrAdmin ? stuckCleaningItems() : Promise.resolve([]),
+        showEvents && isOwnerOrAdmin ? lowStockItems() : Promise.resolve([]),
+        showEvents && isOwnerOrAdmin ? upcomingManifestDeadlines(48) : Promise.resolve([]),
+        showEvents && !ownOnly ? monthlyEventCounts(6) : Promise.resolve(undefined),
       ]);
+
+    const damageFeedWithPhotos = await Promise.all(
+      damageFeed.map(async (r) => ({
+        ...r,
+        photoSignedUrl: r.photoUrl ? await getDamagePhotoUrlAction(r.photoUrl).then((res) => (typeof res === "string" ? res : null)) : null,
+      }))
+    );
 
     const years = [thisYear, String(Number(thisYear) - 1), String(Number(thisYear) - 2)];
 
@@ -151,9 +172,12 @@ export default async function Dashboard({
 
         {showEvents && (
           <div className="space-y-4 mb-6">
-            <ThisWeeksEvents events={weekEvents} />
+            <ThisWeeksEvents events={weekEvents} today={today} />
             {isOwnerOrAdmin && <UnpaidMilestoneRisks risks={milestoneRisks} />}
-            {isOwnerOrAdmin && <OpsSummaryRow pendingDamage={damageCount} manifestCounts={manifestCounts} />}
+            {isOwnerOrAdmin && <ManifestPipelineBar pendingDamage={damageCount} stageCounts={pipelineStageCounts} />}
+            {isOwnerOrAdmin && <UpcomingManifestDeadlines deadlines={manifestDeadlines} today={today} />}
+            {isOwnerOrAdmin && <DamageReportsFeed reports={damageFeedWithPhotos} />}
+            {isOwnerOrAdmin && <OpsAlertStrip stuckCleaning={stuckCleaning} lowStock={lowStock} />}
             {access?.role === "sales" && <SalesPipelineFunnel counts={pipelineCounts} />}
           </div>
         )}
@@ -173,44 +197,32 @@ export default async function Dashboard({
           />
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {ownOnly && memberStats ? (
-            <>
-              <StatCard
-                label="Your outstanding invoices"
-                hint={memberStats.overdueReceivablesCents > 0
-                  ? `${fmtKES(memberStats.overdueReceivablesCents)} overdue`
-                  : "on documents assigned to you"}
-                cents={memberStats.receivablesCents}
-                tone={memberStats.overdueReceivablesCents > 0 ? "warn" : "neutral"}
-              />
-              <StatCard label="Overdue" hint="on your invoices" cents={memberStats.overdueReceivablesCents} tone={memberStats.overdueReceivablesCents > 0 ? "warn" : "good"} />
-              {o.showCollectedThisYearCard && (
-                <StatCard label="Collected this year" hint="payments on your invoices" cents={memberStats.collectedThisYearCents} tone="good" />
-              )}
-              <StatCard label="Your bills to pay" hint="assigned bills & expenses" cents={memberStats.payablesCents} />
-            </>
-          ) : stats ? (
-            <>
-              <StatCard label="Cash & M-Pesa" hint="across all money accounts" cents={stats.cashCents} />
-              <StatCard
-                label="Money you're owed"
-                hint={stats.overdueReceivablesCents > 0
-                  ? `${fmtKES(stats.overdueReceivablesCents)} overdue`
-                  : "accounts receivable"}
-                cents={stats.receivablesCents}
-                tone={stats.overdueReceivablesCents > 0 ? "warn" : "neutral"}
-              />
-              <StatCard label="Money you owe" hint="accounts payable" cents={stats.payablesCents} />
-              <StatCard
-                label="VAT due to KRA"
-                hint="this month so far"
-                cents={stats.netVatDueCents}
-                tone={stats.netVatDueCents > 0 ? "warn" : "good"}
-              />
-            </>
-          ) : null}
-        </div>
+        {ownOnly && memberStats ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label="Your outstanding invoices"
+              hint={memberStats.overdueReceivablesCents > 0
+                ? `${fmtKES(memberStats.overdueReceivablesCents)} overdue`
+                : "on documents assigned to you"}
+              cents={memberStats.receivablesCents}
+              tone={memberStats.overdueReceivablesCents > 0 ? "warn" : "neutral"}
+            />
+            <StatCard label="Overdue" hint="on your invoices" cents={memberStats.overdueReceivablesCents} tone={memberStats.overdueReceivablesCents > 0 ? "warn" : "good"} />
+            {o.showCollectedThisYearCard && (
+              <StatCard label="Collected this year" hint="payments on your invoices" cents={memberStats.collectedThisYearCents} tone="good" />
+            )}
+            <StatCard label="Your bills to pay" hint="assigned bills & expenses" cents={memberStats.payablesCents} />
+          </div>
+        ) : stats ? (
+          <MoneyOverview
+            cashCents={stats.cashCents}
+            receivablesCents={stats.receivablesCents}
+            overdueReceivablesCents={stats.overdueReceivablesCents}
+            payablesCents={stats.payablesCents}
+            netVatDueCents={stats.netVatDueCents}
+            incomeTrend={chartData.map((d) => d.incomeCents)}
+          />
+        ) : null}
 
         {/* Calendar — the command center. Full width, up top, so every booked
             event date is visible at a glance before the money breakdown. */}
@@ -254,7 +266,7 @@ export default async function Dashboard({
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mt-4 items-stretch">
           {!ownOnly && (
             <div className="lg:col-span-3">
-              <IncomeExpenseChart data={chartData} />
+              <IncomeExpenseChart data={chartData} eventCounts={eventCounts} />
             </div>
           )}
           <div className={ownOnly ? "lg:col-span-5" : "lg:col-span-2"}>

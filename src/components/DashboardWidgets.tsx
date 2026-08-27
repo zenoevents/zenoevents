@@ -10,8 +10,13 @@ import { fmtKESCompact, todayISO } from "@/lib/money";
 
 export function IncomeExpenseChart({
   data,
+  eventCounts,
 }: {
   data: { label: string; incomeCents: number; expenseCents: number }[];
+  /** Optional, parallel-indexed to `data` — non-cancelled projects whose
+   *  event date falls in that month. Lets admin see "August was huge
+   *  because we had 4 weddings," not just a raw KSh total. */
+  eventCounts?: number[];
 }) {
   const max = Math.max(1, ...data.flatMap((d) => [d.incomeCents, d.expenseCents]));
   return (
@@ -25,11 +30,21 @@ export function IncomeExpenseChart({
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-[var(--color-ink-200)]" /> Spending
           </span>
+          {eventCounts && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[var(--color-warn)]" /> Events
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-end gap-2 sm:gap-4 flex-1 min-h-[10rem]">
-        {data.map((d) => (
+        {data.map((d, i) => (
           <div key={d.label} className="flex-1 flex flex-col items-center min-w-0 h-full">
+            {eventCounts && (
+              <div className="text-[10px] font-semibold text-[var(--color-warn)] mb-1 tnum">
+                {eventCounts[i] > 0 ? `● ${eventCounts[i]}` : ""}
+              </div>
+            )}
             <div className="w-full flex items-end justify-center gap-1 flex-1">
               <div
                 className="w-3 sm:w-5 rounded-t bg-[var(--color-accent-500)] transition-all"
@@ -222,13 +237,21 @@ export function CalendarWidget({ events, maxPerDay = 2 }: { events: CalEvent[]; 
           const evs = eventDates.get(date) ?? [];
           const isToday = date === today;
           const isSelected = date === selected;
+          // Subtle amber wash, darker with more same-day entries — a busy
+          // or overlapping day (potential double-booking) reads at a
+          // glance before opening it, regardless of what kinds of entries
+          // populate the calendar (works the same for a plain SME org).
+          const densityBg = !isSelected && evs.length >= 2
+            ? `color-mix(in srgb, var(--color-warn) ${Math.min(28, 8 + evs.length * 6)}%, transparent)`
+            : undefined;
           return (
             <button
               key={i}
               onClick={() => setSelected(date)}
               className={`flex flex-col items-center gap-0.5 rounded-lg py-1 px-0.5 transition-colors ${
-                isSelected ? "bg-[var(--color-accent-500)]/10" : "hover:bg-[var(--color-ink-50)]"
+                isSelected ? "bg-[var(--color-accent-500)]/10" : densityBg ? "" : "hover:bg-[var(--color-ink-50)]"
               }`}
+              style={densityBg ? { background: densityBg } : undefined}
             >
               <span
                 className={`w-6 h-6 flex items-center justify-center rounded-full text-[12px] tnum ${
