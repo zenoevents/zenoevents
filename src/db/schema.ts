@@ -1382,7 +1382,7 @@ export const reservations = pgTable("reservations", {
   startDate: text("start_date").notNull(), // dispatch date
   endDate: text("end_date").notNull(), // expected return date
   location: text("location"), // which zone of the venue this booking goes to, e.g. "Main Arena" — per-booking, not the item's catalog category or its storage warehouse
-  status: text("status").notNull().default("booked"), // booked | dispatched | returned | cancelled
+  status: text("status").notNull().default("booked"), // quoted (provisional, pre-confirmation) | booked | dispatched | returned | cancelled
   createdAt: text("created_at").notNull(),
 }, (t) => ({
   itemDatesIdx: index("idx_reservations_item_dates").on(t.inventoryItemId, t.startDate, t.endDate),

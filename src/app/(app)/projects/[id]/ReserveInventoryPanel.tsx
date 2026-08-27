@@ -88,7 +88,14 @@ export function ReserveInventoryPanel({
                   {r.itemName} — {r.label}
                   {r.location && <span className="ml-2 inline-block rounded-full bg-[var(--color-accent-50)] text-[var(--color-accent-700)] text-[10.5px] font-medium px-2 py-0.5 align-middle">{r.location}</span>}
                 </div>
-                <div className="text-[11.5px] text-[var(--color-ink-400)]">{r.qty}× · {r.startDate} → {r.endDate} · {r.status}</div>
+                <div className="text-[11.5px] text-[var(--color-ink-400)] flex items-center gap-1.5">
+                  <span>{r.qty}× · {r.startDate} → {r.endDate}</span>
+                  {r.status === "quoted" ? (
+                    <span className="inline-block rounded-full bg-amber-50 text-amber-700 text-[10.5px] font-medium px-2 py-0.5">Quoted — provisional</span>
+                  ) : (
+                    <span>· {r.status}</span>
+                  )}
+                </div>
               </div>
               {r.status !== "cancelled" && (
                 <button onClick={() => cancel(r.id)} className="text-[12px] text-[var(--color-bad)] hover:underline">Cancel</button>

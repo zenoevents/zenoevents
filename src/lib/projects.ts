@@ -165,10 +165,36 @@ export async function updateProjectStatusAction(id: number, status: ProjectStatu
     const [row] = await db.select({ id: projects.id }).from(projects)
       .where(and(eq(projects.orgId, orgId), eq(projects.id, id))).limit(1);
     if (!row) throw new Error("Project not found");
+    const [before] = await db.select({ status: projects.status }).from(projects)
+      .where(and(eq(projects.orgId, orgId), eq(projects.id, id))).limit(1);
     await db.update(projects).set({ status }).where(eq(projects.id, id));
-    await logAudit({ action: "project.status", module: "projects", recordId: id, detail: status, projectId: id });
+
+    let promotedCount = 0;
+    if (status === "confirmed" && before?.status !== "confirmed") {
+      const quoted = await db.select({ id: reservations.id, inventoryItemId: reservations.inventoryItemId })
+        .from(reservations)
+        .where(and(eq(reservations.orgId, orgId), eq(reservations.projectId, id), eq(reservations.status, "quoted")));
+      if (quoted.length > 0) {
+        await db.update(reservations).set({ status: "booked" })
+          .where(inArray(reservations.id, quoted.map((r) => r.id)));
+        const itemIds = [...new Set(quoted.map((r) => r.inventoryItemId))];
+        await db.update(inventoryItems).set({ status: "reserved" }).where(and(
+          eq(inventoryItems.orgId, orgId),
+          inArray(inventoryItems.id, itemIds),
+          eq(inventoryItems.status, "in_store"),
+        ));
+        promotedCount = quoted.length;
+      }
+    }
+
+    await logAudit({
+      action: "project.status", module: "projects", recordId: id,
+      detail: promotedCount > 0 ? `${status} (+${promotedCount} reservations booked)` : status,
+      projectId: id,
+    });
     revalidatePath("/projects");
     revalidatePath(`/projects/${id}`);
+    revalidatePath("/projects/inventory");
     return { success: true };
   });
 }

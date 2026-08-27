@@ -1,7 +1,7 @@
 "use server";
 
 import { db, manifests, manifestLines, reservations, inventoryItems, items, projects, members } from "@/db";
-import { eq, and, ne, asc } from "drizzle-orm";
+import { eq, and, ne, asc, inArray } from "drizzle-orm";
 import { withOrg, currentOrgId } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
 import { getAccess } from "@/lib/access";
@@ -80,7 +80,7 @@ export async function createManifestAction(projectId: number): Promise<{ success
         .from(reservations)
         .leftJoin(inventoryItems, eq(inventoryItems.id, reservations.inventoryItemId))
         .leftJoin(items, eq(items.id, inventoryItems.itemId))
-        .where(and(eq(reservations.orgId, orgId), eq(reservations.projectId, projectId), ne(reservations.status, "cancelled")));
+        .where(and(eq(reservations.orgId, orgId), eq(reservations.projectId, projectId), inArray(reservations.status, ["booked", "dispatched"])));
 
       const [manifest] = await db.insert(manifests).values({
         orgId, projectId, status: "draft", createdAt: nowISO(),

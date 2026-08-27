@@ -197,6 +197,10 @@ export async function createReservationAction(params: {
       };
     }
 
+    const [project] = await db.select({ status: projects.status }).from(projects)
+      .where(and(eq(projects.orgId, orgId), eq(projects.id, params.projectId))).limit(1);
+    const firm = !!project && ["confirmed", "in_progress", "completed"].includes(project.status);
+
     await db.insert(reservations).values({
       orgId,
       inventoryItemId: params.inventoryItemId,
@@ -205,15 +209,17 @@ export async function createReservationAction(params: {
       startDate: params.startDate,
       endDate: params.endDate,
       location: params.location?.trim() || null,
-      status: "booked",
+      status: firm ? "booked" : "quoted",
       createdAt: nowISO(),
     });
 
-    await db.update(inventoryItems).set({ status: "reserved" }).where(and(
-      eq(inventoryItems.orgId, orgId),
-      eq(inventoryItems.id, params.inventoryItemId),
-      eq(inventoryItems.status, "in_store"),
-    ));
+    if (firm) {
+      await db.update(inventoryItems).set({ status: "reserved" }).where(and(
+        eq(inventoryItems.orgId, orgId),
+        eq(inventoryItems.id, params.inventoryItemId),
+        eq(inventoryItems.status, "in_store"),
+      ));
+    }
 
     await logAudit({ action: "reservation.create", module: "projects", recordId: params.projectId, projectId: params.projectId });
     revalidatePath(`/projects/${params.projectId}`);
