@@ -426,6 +426,12 @@ export const documents = pgTable("documents", {
   customerContactId: integer("customer_contact_id"),
   relatedInvoiceId: integer("related_invoice_id"),
   isBillable: boolean("is_billable").notNull().default(false),
+  /** Set on a billable expense/bill once its cost has been folded as a
+   *  REAL persisted line into another document (a project's milestone
+   *  invoice) — deliberately separate from relatedInvoiceId, which drives
+   *  the older manual/virtual billable-expense mechanism. Colliding the
+   *  two would double-render the same cost when that invoice is viewed. */
+  billedDocumentId: integer("billed_document_id"),
   // set when a bill approval is rejected, shown back to the submitter
   approvalNote: text("approval_note"),
   // Snapshot of who created the document — survives staff renames/removal, shown on the PDF as "Sales Agent".

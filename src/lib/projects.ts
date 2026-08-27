@@ -113,6 +113,8 @@ export async function projectDocuments(id: number) {
         date: documents.date,
         totalCents: documents.totalCents,
         paidCents: documents.paidCents,
+        isBillable: documents.isBillable,
+        billedDocumentId: documents.billedDocumentId,
       })
       .from(documents)
       .where(and(eq(documents.orgId, orgId), eq(documents.projectId, id)))

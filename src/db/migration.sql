@@ -1125,3 +1125,6 @@ CREATE INDEX IF NOT EXISTS idx_org_audit_org_project ON org_audit_log(org_id, pr
 
 -- Projects as hub Phase C: contract template setting.
 ALTER TABLE org ADD COLUMN IF NOT EXISTS contract_template TEXT;
+
+-- Projects as hub Phase E: billable expenses persisted onto invoices.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS billed_document_id INTEGER;

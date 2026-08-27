@@ -1,7 +1,7 @@
 "use server";
 
 import { db, paymentSchedule, projects, documents, org } from "@/db";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql, isNull, inArray } from "drizzle-orm";
 import { withOrg, currentOrgId } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
 import { nowISO, todayISO } from "@/lib/money";
@@ -121,27 +121,61 @@ export async function generateInvoiceForMilestoneAction(id: number) {
 
     const [orgRow] = await db.select({ vatRegistered: org.vatRegistered }).from(org).where(eq(org.id, orgId)).limit(1);
 
+    // Costs staff fronted for this event and marked billable (e.g. an
+    // item bought a day before the event, or transport) — folded in as
+    // real invoice lines here, once, at creation time. billedDocumentId
+    // (not relatedInvoiceId — see schema.ts) marks them consumed so a
+    // later milestone invoice doesn't pull them again.
+    const billableExpenses = await db
+      .select({ id: documents.id, number: documents.number, notes: documents.notes, totalCents: documents.totalCents })
+      .from(documents)
+      .where(and(
+        eq(documents.orgId, orgId),
+        eq(documents.projectId, row.projectId),
+        eq(documents.isBillable, true),
+        isNull(documents.billedDocumentId),
+        inArray(documents.type, ["expense", "bill"]),
+        sql`${documents.status} != 'void'`,
+      ));
+
     const result = await upsertDocumentAction({
       type: "invoice",
       contactId: proj.contactId,
       date: todayISO(),
       taxInclusive: false,
       notes: `${proj.name} — ${row.milestoneName}`,
-      lines: [{
-        description: `${row.milestoneName} — ${proj.name}`,
-        qty: 1,
-        unitPriceCents: amountCents,
-        discountPct: 0,
-        taxClass: orgRow?.vatRegistered ? "B16" : "D_NONVAT",
-      }],
+      lines: [
+        {
+          description: `${row.milestoneName} — ${proj.name}`,
+          qty: 1,
+          unitPriceCents: amountCents,
+          discountPct: 0,
+          taxClass: orgRow?.vatRegistered ? "B16" : "D_NONVAT",
+        },
+        ...billableExpenses.map((exp) => ({
+          description: `Billable Expense (${exp.number}): ${exp.notes || "Out-of-pocket expense"}`,
+          qty: 1,
+          unitPriceCents: exp.totalCents,
+          discountPct: 0,
+          taxClass: "D_NONVAT" as const,
+        })),
+      ],
       issue: true,
     });
     if (result.error || !result.id) throw new Error(result.error || "Couldn't create the invoice");
 
     await db.update(documents).set({ projectId: row.projectId }).where(eq(documents.id, result.id));
     await db.update(paymentSchedule).set({ documentId: result.id }).where(eq(paymentSchedule.id, id));
+    if (billableExpenses.length > 0) {
+      await db.update(documents).set({ billedDocumentId: result.id })
+        .where(inArray(documents.id, billableExpenses.map((e) => e.id)));
+    }
 
-    await logAudit({ action: "payment_schedule.invoice", module: "projects", recordId: result.id, detail: row.milestoneName, projectId: row.projectId });
+    await logAudit({
+      action: "payment_schedule.invoice", module: "projects", recordId: result.id,
+      detail: billableExpenses.length > 0 ? `${row.milestoneName} (+${billableExpenses.length} billable expenses)` : row.milestoneName,
+      projectId: row.projectId,
+    });
     revalidatePath(`/projects/${row.projectId}`);
     revalidatePath("/sales/invoices");
     return { success: true, documentId: result.id };

@@ -54,7 +54,9 @@ const TABS = [
   { key: "audit", label: "Audit Log", icon: "🕒" },
 ] as const;
 
-function DocTable({ docs }: { docs: { id: number; type: string; number: string; status: string; date: string; totalCents: number }[] }) {
+type ProjectDocRow = { id: number; type: string; number: string; status: string; date: string; totalCents: number; isBillable?: boolean; billedDocumentId?: number | null };
+
+function DocTable({ docs, showBillable }: { docs: ProjectDocRow[]; showBillable?: boolean }) {
   return (
     <TableCard>
       <thead>
@@ -62,6 +64,7 @@ function DocTable({ docs }: { docs: { id: number; type: string; number: string; 
           <Th>Number</Th>
           <Th>Date</Th>
           <Th>Status</Th>
+          {showBillable && <Th>Billable</Th>}
           <Th right>Total</Th>
         </tr>
       </thead>
@@ -73,6 +76,19 @@ function DocTable({ docs }: { docs: { id: number; type: string; number: string; 
             </Td>
             <Td>{d.date}</Td>
             <Td><StatusPill status={d.status} docType={d.type} /></Td>
+            {showBillable && (
+              <Td>
+                {d.isBillable ? (
+                  d.billedDocumentId ? (
+                    <Link href={docHref("invoice", d.billedDocumentId)} className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 hover:underline">Billed</Link>
+                  ) : (
+                    <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium bg-amber-50 text-amber-700">Billable — pending</span>
+                  )
+                ) : (
+                  <span className="text-[var(--color-ink-300)]">—</span>
+                )}
+              </Td>
+            )}
             <Td right><Money cents={d.totalCents} /></Td>
           </tr>
         ))}
@@ -289,7 +305,7 @@ export default async function ProjectDetailPage({
             {expenseDocs.length === 0 ? (
               <EmptyState title="No expenses yet" body="Costs incurred for this event — tag an expense to this project when you create it, and it rolls into Cost so far above." />
             ) : (
-              <DocTable docs={expenseDocs} />
+              <DocTable docs={expenseDocs} showBillable />
             )}
           </div>
         )}
