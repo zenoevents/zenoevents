@@ -79,6 +79,7 @@ export interface EditorInitialData {
   customerContactId?: number | "";
   relatedInvoiceId?: number | "";
   isBillable?: boolean;
+  projectId?: number | "";
   isTemplate?: boolean;
   status?: string;
   lines: EditorLine[];
@@ -104,6 +105,8 @@ export function DocumentEditor({
   initialData,
   sourceInvoiceId,
   defaultNotes,
+  projects = [],
+  defaultProjectId,
 }: {
   type: "invoice" | "quote" | "credit_note" | "bill" | "expense" | "purchase_order";
   contacts: Option[];
@@ -138,6 +141,10 @@ export function DocumentEditor({
    *  the invoice it's against. Only applied when creating a new document. */
   sourceInvoiceId?: number;
   defaultNotes?: string;
+  /** Which project this document belongs to — shows up both in the main
+   *  quotes/invoices/expenses lists and inside that project's own tabs. */
+  projects?: Option[];
+  defaultProjectId?: number | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -169,6 +176,7 @@ export function DocumentEditor({
   // was rebilled on. Money-out documents only.
   const isSpend = type === "expense" || type === "bill";
   const [isBillable, setIsBillable] = useState<boolean>(initialData?.isBillable ?? false);
+  const [projectId, setProjectId] = useState<number | "">(initialData?.projectId ?? defaultProjectId ?? "");
   const [customerContactId, setCustomerContactId] = useState<number | "">(initialData?.customerContactId ?? "");
   const [relatedInvoiceId, setRelatedInvoiceId] = useState<number | "">(initialData?.relatedInvoiceId ?? "");
   const [customerInvoices, setCustomerInvoices] = useState<{ id: number; number: string; date: string; totalCents: number; status: string }[]>([]);
@@ -356,6 +364,7 @@ export function DocumentEditor({
           customerContactId: isSpend && customerContactId !== "" ? Number(customerContactId) : null,
           relatedInvoiceId: isSpend && relatedInvoiceId !== "" ? Number(relatedInvoiceId) : null,
           isBillable: isSpend ? isBillable : false,
+          projectId: projectId === "" ? null : Number(projectId),
           assignedMemberIds: assignedMemberIds.length > 0 ? assignedMemberIds : undefined,
           isTemplate: initialData?.isTemplate,
           saveAsTemplate,
@@ -484,6 +493,21 @@ export function DocumentEditor({
               </label>
             )}
           </>
+        )}
+        {projects.length > 0 && (
+          <label className="block">
+            <span className="text-[12px] font-medium text-[var(--color-ink-600)]">
+              Project <span className="font-normal text-[var(--color-ink-400)]">(optional)</span>
+            </span>
+            <select
+              className={inputCls + " mt-1"}
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">No project</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
+          </label>
         )}
         <label className="flex items-center gap-2 self-end pb-2">
           <input

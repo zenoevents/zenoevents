@@ -5,8 +5,14 @@ import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewExpensePage() {
+export default async function NewExpensePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ project?: string }>;
+}) {
   await requirePerm("expenses");
+  const { project } = await searchParams;
+  const defaultProjectId = project ? Number(project) : null;
   const opts = await editorOptions("purchase");
   return (
     <>
@@ -23,6 +29,8 @@ export default async function NewExpensePage() {
         expenseAccounts={opts.expenseAccounts}
         bankAccounts={opts.bankAccounts}
         vendorPayouts={opts.vendorPayouts}
+        projects={opts.projects}
+        defaultProjectId={defaultProjectId}
         backHref="/purchases/expenses"
         detailHref="/purchases/expenses"
       />

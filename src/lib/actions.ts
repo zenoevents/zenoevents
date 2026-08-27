@@ -610,6 +610,9 @@ async function _saveDocument(data: {
   /** Invoice this cost was rebilled on. Must belong to customerContactId. */
   relatedInvoiceId?: number | null;
   isBillable?: boolean;
+  /** Which event this document belongs to — so it shows up both in the
+   *  main quotes/invoices/expenses lists and inside that project. */
+  projectId?: number | null;
   assignedMemberIds?: number[];
   isTemplate?: boolean;
   saveAsTemplate?: boolean;
@@ -741,6 +744,7 @@ async function _saveDocument(data: {
           payoutDestination: data.payoutDestination ?? null,
           payoutDestinationType: data.payoutDestinationType ?? null,
           payoutAccountNumber: data.payoutAccountNumber ?? null,
+          projectId: data.projectId ?? null,
         })
         .where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, data.id)));
       await tx.delete(documentLines).where(eq(documentLines.documentId, data.id));
@@ -771,6 +775,7 @@ async function _saveDocument(data: {
           payoutDestination: data.payoutDestination ?? null,
           payoutDestinationType: data.payoutDestinationType ?? null,
           payoutAccountNumber: data.payoutAccountNumber ?? null,
+          projectId: data.projectId ?? null,
           createdByName: data.createdByName,
           createdByRole: data.createdByRole,
           createdAt: nowISO(),
@@ -1014,6 +1019,7 @@ async function _convertQuoteToInvoiceInner(quote: typeof documents.$inferSelect,
     dueDate: null,
     taxInclusive: quote.taxInclusive,
     notes: quote.notes ?? undefined,
+    projectId: quote.projectId,
     lines: lines.map((l) => ({
       itemId: l.itemId,
       description: l.description,

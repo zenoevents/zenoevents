@@ -1,5 +1,5 @@
-import { db, contacts, items, accounts, bankAccounts, members, documents, documentLines, documentAssignments, costCenters, warehouses, itemGroups } from "@/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { db, contacts, items, accounts, bankAccounts, members, documents, documentLines, documentAssignments, costCenters, warehouses, itemGroups, projects } from "@/db";
+import { and, eq, inArray, desc } from "drizzle-orm";
 import { getOrg } from "@/lib/org";
 import { getAccess } from "@/lib/access";
 
@@ -33,6 +33,7 @@ export async function editorOptions(side: "sale" | "purchase") {
     : [];
   const costCenterRows = await db.select().from(costCenters).where(and(eq(costCenters.orgId, orgId), eq(costCenters.active, true)));
   const warehouseRows = await db.select().from(warehouses).where(and(eq(warehouses.orgId, orgId), eq(warehouses.archived, false)));
+  const projectRows = await db.select({ id: projects.id, name: projects.name }).from(projects).where(eq(projects.orgId, orgId)).orderBy(desc(projects.eventDate));
 
   return {
     customDocumentColumnName: org.customDocumentColumnName,
@@ -61,6 +62,7 @@ export async function editorOptions(side: "sale" | "purchase") {
       purchaseAccountId: i.purchaseAccountId,
     })),
     itemGroups: itemGroupRows.map((g) => ({ id: g.id, label: g.name })),
+    projects: projectRows.map((p) => ({ id: p.id, label: p.name })),
     itemGroupsRequired: org.itemGroupsEnabled,
     expenseAccounts: expenseRows.map((a) => ({ id: a.id, label: a.name })),
     bankAccounts: bankRows.map((b) => ({ id: b.id, label: b.name })),
@@ -92,6 +94,7 @@ export async function fetchInitialData(docId: number) {
     assignedMemberIds: assignments.map(a => a.memberId),
     customerContactId: doc.customerContactId ?? "",
     relatedInvoiceId: doc.relatedInvoiceId ?? "",
+    projectId: doc.projectId ?? "",
     lines: lines.map(l => ({
       itemId: l.itemId,
       description: l.description,

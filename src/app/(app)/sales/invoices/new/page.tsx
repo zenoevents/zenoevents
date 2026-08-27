@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
 export default async function NewInvoicePage({
   searchParams,
 }: {
-  searchParams: Promise<{ contact?: string; templateId?: string }>;
+  searchParams: Promise<{ contact?: string; templateId?: string; project?: string }>;
 }) {
   await requirePerm("invoices");
-  const { contact, templateId } = await searchParams;
+  const { contact, templateId, project } = await searchParams;
   const defaultContactId = contact ? Number(contact) : null;
+  const defaultProjectId = project ? Number(project) : null;
   const opts = await editorOptions("sale");
 
   let initialData = undefined;
@@ -48,6 +49,8 @@ export default async function NewInvoicePage({
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
         defaultContactId={defaultContactId}
+        projects={opts.projects}
+        defaultProjectId={defaultProjectId}
         initialData={initialData as any}
         backHref="/sales/invoices"
         detailHref="/sales/invoices"
