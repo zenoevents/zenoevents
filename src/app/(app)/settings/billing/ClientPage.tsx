@@ -12,6 +12,64 @@ function daysUntil(dateISO: string): number {
   return Math.ceil((new Date(dateISO).getTime() - Date.now()) / 86400000);
 }
 
+const FEATURE_GROUPS: { title: string; items: string[] }[] = [
+  {
+    title: "Sales & Billing",
+    items: [
+      "Unlimited invoices & quotes",
+      "eTIMS-compliant VAT invoicing",
+      "Recurring invoices, bills & expenses",
+      "Credit notes & customer statements",
+      "Quote templates & one-click conversion",
+    ],
+  },
+  {
+    title: "Events & Inventory",
+    items: [
+      "Projects as the hub — quotes, invoices, files, tasks in one place",
+      "Event Inventory — rental gear tracked as reservable batches",
+      "Warehouse manifests — pick, load, dispatch, return, reconcile",
+      "Damage reports with photo evidence",
+      "Payment milestones & deposit schedules",
+    ],
+  },
+  {
+    title: "Payments & Banking",
+    items: [
+      "M-Pesa & card payment gateways",
+      "Automated payment matching & reconciliation",
+      "SMS invoice & payment reminders",
+      "B2B payouts to vendors and staff",
+      "Multi-account bank & cash tracking",
+    ],
+  },
+  {
+    title: "Team & Operations",
+    items: [
+      "Unlimited staff seats & custom roles",
+      "Payroll & KRA-compliant payslips",
+      "Customer self-service portal",
+      "Purchase orders & multi-warehouse stock",
+      "Full analytics & reporting suite",
+    ],
+  },
+];
+
+const MAINTENANCE_COVERS = [
+  "Hosting & infrastructure, kept fast and always on",
+  "Continuous feature updates — you get every new release, no upgrade needed",
+  "KRA & eTIMS compliance kept current as regulations change",
+  "Daily backups and data safety",
+  "Direct support from the team that built it",
+];
+
+const WHY_US = [
+  { title: "Built for Kenyan event companies", body: "Not a generic accounting tool with events bolted on — reservations, manifests, and damage tracking are first-class, not workarounds." },
+  { title: "One fee, everything included", body: "No feature paywalls, no per-seat charges, no surprise upsells. What you see here is what you get." },
+  { title: "eTIMS-ready from day one", body: "VAT invoicing, KRA compliance, and tax filing prep built in, not an afterthought." },
+  { title: "A human, not a ticket queue", body: "Support and onboarding come directly from the people running the platform." },
+];
+
 export function BillingClient({
   status,
   paidUntil,
@@ -111,50 +169,124 @@ export function BillingClient({
   };
 
   return (
-    <div className="max-w-2xl space-y-6 relative">
-      {/* Status */}
-      <div className={`rounded-2xl border px-5 py-4 ${status === "locked" ? "border-red-200 bg-red-50" : "border-[var(--color-ink-100)] bg-white"}`}>
-        {status === "locked" ? (
-          <>
-            <div className="text-[14px] font-semibold text-red-900">Access paused</div>
-            <div className="mt-1 text-[13px] text-red-800">Your trial or subscription ended on {paidUntil}. Contact us or pay now to reactivate.</div>
-          </>
-        ) : (
-          <>
-            <div className="text-[14px] font-semibold">Active{daysLeft <= 14 ? ` — ${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : ""}</div>
-            <div className="mt-1 text-[13px] text-[var(--color-ink-500)]">Access guaranteed through {paidUntil}.</div>
-          </>
-        )}
-      </div>
-
-      {/* Fees */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-[var(--color-ink-100)] bg-white px-5 py-4">
-          <div className="text-[12px] text-[var(--color-ink-500)]">One-time setup fee</div>
-          <div className="text-[22px] font-bold mt-1">{fmtKES(oneTimeFeeCents).replace(".00", "")}</div>
+    <div className="space-y-16 pb-12 relative">
+      {status === "locked" && (
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-900">
+            <div className="text-sm font-semibold">Your access ended on {paidUntil}.</div>
+            <div className="mt-1 text-sm text-red-800">Pay now below, or contact us to reactivate your account.</div>
+          </div>
         </div>
-        <div className="rounded-2xl border border-[var(--color-ink-100)] bg-white px-5 py-4">
-          <div className="text-[12px] text-[var(--color-ink-500)]">Monthly maintenance fee</div>
-          <div className="text-[22px] font-bold mt-1">{fmtKES(monthlyFeeCents).replace(".00", "")}</div>
-        </div>
-      </div>
-
-      {monthlyFeeCents > 0 && (
-        <button
-          onClick={() => setModal((prev) => ({ ...prev, isOpen: true, status: "idle", error: undefined }))}
-          className="w-full py-3 rounded-xl text-[14px] font-semibold text-white bg-[var(--color-brand)] hover:opacity-90 shadow-sm"
-        >
-          Pay now
-        </button>
       )}
 
-      {/* History */}
-      <div>
-        <div className="text-[13px] font-semibold mb-2">Payment history</div>
+      {/* Hero */}
+      <div className="relative pt-12 pb-8 text-center rounded-3xl overflow-hidden bg-gradient-to-b from-[var(--color-brand)]/10 to-transparent">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-2xl bg-[var(--color-brand)]/5 blur-3xl rounded-full" />
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full bg-[var(--color-brand)]/10 text-[var(--color-brand)] mb-4">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            {status === "locked" ? "Access paused" : daysLeft <= 14 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left on your trial` : "Your account is active"}
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-[var(--color-ink-900)] tracking-tight">
+            One Plan. <br className="md:hidden" /> Everything Included.
+          </h1>
+          <p className="mt-4 text-base text-[var(--color-ink-600)] max-w-2xl mx-auto px-4">
+            No tiers, no feature paywalls, no per-seat charges. Every org gets the full platform — you just pay a simple setup fee once, and a monthly fee to keep it running and improving.
+          </p>
+
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto px-4">
+            <div className="bg-white rounded-2xl border border-[var(--color-ink-100)] shadow-sm px-5 py-4 text-left">
+              <div className="text-[12px] text-[var(--color-ink-500)]">One-time setup fee</div>
+              <div className="text-[24px] font-extrabold mt-1">{fmtKES(oneTimeFeeCents).replace(".00", "")}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-[var(--color-ink-100)] shadow-sm px-5 py-4 text-left">
+              <div className="text-[12px] text-[var(--color-ink-500)]">Monthly maintenance</div>
+              <div className="text-[24px] font-extrabold mt-1">{fmtKES(monthlyFeeCents).replace(".00", "")}</div>
+            </div>
+          </div>
+
+          {monthlyFeeCents > 0 && (
+            <button
+              onClick={() => setModal((prev) => ({ ...prev, isOpen: true, status: "idle", error: undefined }))}
+              className="mt-6 px-8 py-3.5 rounded-xl text-[14px] font-bold text-white bg-gradient-to-r from-[var(--color-brand)] to-[var(--color-accent-500)] hover:opacity-90 shadow-lg shadow-[var(--color-brand)]/20 transition-all"
+            >
+              Pay now
+            </button>
+          )}
+          <div className="mt-3 text-[12px] text-[var(--color-ink-400)]">Access guaranteed through {paidUntil}</div>
+        </div>
+      </div>
+
+      {/* What's included */}
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full bg-[var(--color-brand)]/10 text-[var(--color-brand)] mb-4">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+            What's included
+          </div>
+          <h2 className="text-3xl font-extrabold text-[var(--color-ink-900)] tracking-tight">Every feature. No exceptions.</h2>
+          <p className="mt-3 text-[15px] text-[var(--color-ink-600)]">The full platform, from your first quote to closing out an event.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {FEATURE_GROUPS.map((group) => (
+            <div key={group.title} className="bg-white rounded-3xl border border-[var(--color-ink-100)] shadow-lg p-6">
+              <h3 className="text-[14px] font-bold text-[var(--color-ink-900)] mb-4">{group.title}</h3>
+              <ul className="space-y-3">
+                {group.items.map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-[13.5px] text-[var(--color-ink-700)] font-medium">
+                    <div className="mt-0.5 shrink-0 w-5 h-5 bg-[var(--color-brand)] text-white rounded-full flex items-center justify-center shadow-sm">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* What maintenance covers */}
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="bg-white rounded-3xl border border-[var(--color-ink-100)] shadow-xl p-8 md:p-10">
+          <h2 className="text-2xl font-extrabold text-[var(--color-ink-900)] tracking-tight mb-2">What your monthly fee covers</h2>
+          <p className="text-[14px] text-[var(--color-ink-600)] mb-6">It's not a subscription for access — it's what keeps the platform running and improving under you.</p>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {MAINTENANCE_COVERS.map((item) => (
+              <li key={item} className="flex items-start gap-3 text-[13.5px] text-[var(--color-ink-700)] font-medium">
+                <div className="mt-0.5 shrink-0 w-5 h-5 bg-[var(--color-accent-500)] text-white rounded-full flex items-center justify-center shadow-sm">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Why us */}
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-extrabold text-[var(--color-ink-900)] tracking-tight">Why Zeno</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {WHY_US.map((w) => (
+            <div key={w.title} className="rounded-3xl border border-[var(--color-ink-100)] bg-white shadow-lg p-6">
+              <h3 className="text-[14px] font-bold text-[var(--color-ink-900)] mb-1.5">{w.title}</h3>
+              <p className="text-[13px] text-[var(--color-ink-600)]">{w.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Payment history */}
+      <div className="max-w-5xl mx-auto px-4">
+        <h2 className="text-[15px] font-bold text-[var(--color-ink-900)] mb-3">Payment history</h2>
         {history.length === 0 ? (
-          <div className="text-[13px] text-[var(--color-ink-400)]">No payments recorded yet.</div>
+          <div className="bg-white rounded-2xl border border-[var(--color-ink-100)] px-5 py-6 text-center text-[13px] text-[var(--color-ink-400)]">No payments recorded yet.</div>
         ) : (
-          <div className="rounded-2xl border border-[var(--color-ink-100)] bg-white divide-y divide-[var(--color-ink-100)]">
+          <div className="bg-white rounded-2xl border border-[var(--color-ink-100)] shadow-sm divide-y divide-[var(--color-ink-100)] overflow-hidden">
             {history.map((h) => (
               <div key={h.id} className="flex items-center justify-between px-5 py-3 text-[13px]">
                 <div>
