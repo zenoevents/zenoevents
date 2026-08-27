@@ -6,7 +6,8 @@ import { getAccessCached, canViewAllData } from "@/lib/access";
 import { dashboardStats, monthlyIncomeExpense, docStatusOverview, memberDashboardStats } from "@/lib/reports";
 import { fmtKES, todayISO } from "@/lib/money";
 import { PageHeader, StatCard, StatusPill, TableCard, Th, Td } from "@/components/ui";
-import { IncomeExpenseChart, TodoWidget, CalendarWidget } from "@/components/DashboardWidgets";
+import { IncomeExpenseChart, TodoWidget } from "@/components/DashboardWidgets";
+import { CalendarWidget } from "@/components/CalendarWidget";
 import { DocOverview } from "@/components/DocOverview";
 import { TimeTrackingCard } from "@/components/TimeTrackingCard";
 import { getActiveShift } from "@/lib/time-tracking";
@@ -237,14 +238,16 @@ export default async function Dashboard({
                 color: projectStatusColors[p.status] ?? projectStatusColors.lead,
                 href: `/projects/${p.id}`,
                 subtitle: [p.clientName, p.venue, projectStatusLabels[p.status] ?? p.status].filter(Boolean).join(" · "),
+                source: "project" as const,
               })),
-              ...eventRows.map((e) => ({ id: `evt-${e.id}`, title: e.title, date: e.date, color: "#515154", deletable: true, dbId: e.id })),
+              ...eventRows.map((e) => ({ id: `evt-${e.id}`, title: e.title, date: e.date, color: "#515154", deletable: true, dbId: e.id, source: "manual" as const })),
               ...dueDocs.map((d) => ({
                 id: `doc-${d.id}`,
                 title: d.number,
                 date: d.dueDate!,
                 color: d.type === "invoice" ? "#2563eb" : "#b8860b",
                 href: d.type === "invoice" ? `/sales/invoices/${d.id}` : `/purchases/bills/${d.id}`,
+                source: "document" as const,
               })),
               ...recurringRows.map((r) => ({
                 id: `rec-${r.id}`,
@@ -252,6 +255,7 @@ export default async function Dashboard({
                 date: r.nextRunDate,
                 color: "#1f8a4c",
                 href: "/recurring",
+                source: "recurring" as const,
               })),
             ]}
           />
