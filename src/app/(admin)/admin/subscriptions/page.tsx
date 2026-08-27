@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { db, subscriptions, org } from "@/db";
 import { eq, desc } from "drizzle-orm";
-import { subscriptionStatusForDate } from "@/lib/billing";
+import { resolveAccess } from "@/lib/billing";
 
 export default async function AdminSubscriptionsPage() {
   const today = new Date().toISOString().slice(0, 10);
@@ -11,7 +11,6 @@ export default async function AdminSubscriptionsPage() {
       id: subscriptions.id,
       orgId: subscriptions.orgId,
       orgName: org.name,
-      plan: subscriptions.plan,
       paidUntil: subscriptions.paidUntil,
       createdAt: subscriptions.createdAt,
     })
@@ -32,28 +31,17 @@ export default async function AdminSubscriptionsPage() {
             <thead className="bg-[var(--color-ink-50)] border-b border-[var(--color-ink-200)] text-[13px] text-[var(--color-ink-600)] uppercase tracking-wider">
               <tr>
                 <th className="px-4 py-3 font-medium">Org</th>
-                <th className="px-4 py-3 font-medium">Plan</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Paid Until</th>
+                <th className="px-4 py-3 font-medium">Access Until</th>
                 <th className="px-4 py-3 font-medium">Created</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-ink-100)]">
               {subs.map((s) => {
-                const status = subscriptionStatusForDate(s.paidUntil, today);
+                const status = resolveAccess(s.paidUntil, today).status;
                 return (
                   <tr key={s.id} className="hover:bg-[var(--color-ink-50)] transition-colors">
                   <td className="px-4 py-3 font-medium">{s.orgName || `Org #${s.orgId}`}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      status === "expired" ? "bg-red-100 text-red-800"
-                        : s.plan === "business" ? "bg-purple-100 text-purple-800"
-                        : s.plan === "standard" ? "bg-blue-100 text-blue-800"
-                        : "bg-gray-100 text-gray-800"
-                    }`}>
-                      {status === "expired" ? `${s.plan} expired` : s.plan}
-                    </span>
-                  </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                       status === "active" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
@@ -68,7 +56,7 @@ export default async function AdminSubscriptionsPage() {
               })}
               {subs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-[var(--color-ink-500)]">
+                  <td colSpan={4} className="px-4 py-8 text-center text-[var(--color-ink-500)]">
                     No subscriptions found.
                   </td>
                 </tr>

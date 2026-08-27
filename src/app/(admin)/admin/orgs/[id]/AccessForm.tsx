@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setOrgPlanAction } from "../../actions";
+import { setAccessAction } from "../../actions";
 
-export function PlanForm({ orgId, currentPlan, currentPaidUntil }: { orgId: number; currentPlan: string; currentPaidUntil: string }) {
+export function AccessForm({ orgId, currentPaidUntil }: { orgId: number; currentPaidUntil: string }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -14,7 +14,7 @@ export function PlanForm({ orgId, currentPlan, currentPaidUntil }: { orgId: numb
     setSuccess(false);
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await setOrgPlanAction(orgId, fd);
+      const res = await setAccessAction(orgId, fd);
       if (res?.error) setError(res.error);
       else setSuccess(true);
     });
@@ -25,15 +25,7 @@ export function PlanForm({ orgId, currentPlan, currentPaidUntil }: { orgId: numb
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
       <label>
-        <span className="block text-[11.5px] font-medium text-[var(--color-ink-600)] mb-1">Plan</span>
-        <select name="plan" defaultValue={currentPlan} className={inputCls}>
-          <option value="free">Free</option>
-          <option value="standard">Standard</option>
-          <option value="business">Business</option>
-        </select>
-      </label>
-      <label>
-        <span className="block text-[11.5px] font-medium text-[var(--color-ink-600)] mb-1">Paid until</span>
+        <span className="block text-[11.5px] font-medium text-[var(--color-ink-600)] mb-1">Access until</span>
         <input type="date" name="paidUntil" defaultValue={currentPaidUntil} className={inputCls} />
       </label>
       <button
@@ -45,6 +37,7 @@ export function PlanForm({ orgId, currentPlan, currentPaidUntil }: { orgId: numb
       </button>
       {error && <p className="w-full text-[12px] text-[var(--color-bad)]">{error}</p>}
       {success && <p className="w-full text-[12px] text-[var(--color-good)]">Updated. Change is live for the tenant immediately.</p>}
+      <p className="w-full text-[11px] text-[var(--color-ink-400)]">Extend to reactivate/extend trial or subscription. Set a past date to lock the org immediately.</p>
     </form>
   );
 }

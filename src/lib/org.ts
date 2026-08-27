@@ -64,17 +64,17 @@ export async function withOrg<T>(fn: () => Promise<T>, options?: { requireWrite?
   // Already inside an org context (nested action call) — reuse it.
   if (orgContext.getStore()) {
     if (options?.requireWrite) {
-      const { getEntitlements } = await import("./billing-server");
-      const ents = await getEntitlements(orgContext.getStore()!);
-      if (ents.isReadOnly) throw new Error("Your subscription has expired. Please upgrade to continue creating or editing data.");
+      const { getBillingAccess } = await import("./billing-server");
+      const access = await getBillingAccess(orgContext.getStore()!);
+      if (access.status === "locked") throw new Error("Your access is currently paused. Contact us to reactivate your account.");
     }
     return fn();
   }
   const o = await getOrg();
   if (options?.requireWrite) {
-    const { getEntitlements } = await import("./billing-server");
-    const ents = await getEntitlements(o.id);
-    if (ents.isReadOnly) throw new Error("Your subscription has expired. Please upgrade to continue creating or editing data.");
+    const { getBillingAccess } = await import("./billing-server");
+    const access = await getBillingAccess(o.id);
+    if (access.status === "locked") throw new Error("Your access is currently paused. Contact us to reactivate your account.");
   }
   return orgContext.run(o.id, fn);
 }
@@ -96,10 +96,14 @@ export async function seedOrgDefaults(orgId: number) {
   const { subscriptions, itemTypes } = await import("@/db");
   const now = new Date().toISOString();
 
+  // 7-day full-access trial, then a hard lockout until the admin
+  // reactivates (manually, or via a successful "Pay now" payment).
+  const trialEnd = new Date();
+  trialEnd.setDate(trialEnd.getDate() + 7);
   await db.insert(subscriptions).values({
     orgId,
-    plan: "free",
-    paidUntil: "9999-12-31",
+    plan: "trial",
+    paidUntil: trialEnd.toISOString().slice(0, 10),
     createdAt: now,
   });
 

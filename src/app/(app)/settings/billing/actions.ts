@@ -5,35 +5,34 @@ import { getOrg } from "@/lib/org";
 import { db, subscriptions, billingPayments } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { PLANS, PlanKey, BillingCycle, subscriptionStatusForDate } from "@/lib/billing";
 import { intasendStkPush, intasendStatus, intasendCheckout, normalizeKenyanPhone } from "@/lib/payments/intasend";
 import { headers } from "next/headers";
 import { applyBillingPayment } from "@/lib/billing-apply";
 
-/** Kick off a real IntaSend M-Pesa STK push for a plan upgrade/renewal. */
-export async function initiateSubscriptionPaymentAction(plan: PlanKey, cycle: BillingCycle, mpesaPhone: string) {
+/** Kick off a real IntaSend M-Pesa STK push for the org's own monthly
+ *  maintenance fee — self-serve alternative to waiting on an admin. */
+export async function initiateSubscriptionPaymentAction(mpesaPhone: string) {
   try {
     await requirePerm("settings");
     const o = await getOrg();
 
-    if (!PLANS[plan] || plan === "free") return { error: "Invalid plan selected" };
-    const amountCents = cycle === "annual" ? PLANS[plan].annualCents : PLANS[plan].monthlyCents;
+    if (!o.monthlyFeeCents || o.monthlyFeeCents <= 0) return { error: "No maintenance fee has been set for your account yet — contact us." };
     const phone = normalizeKenyanPhone(mpesaPhone);
 
     const [row] = await db.insert(billingPayments).values({
       orgId: o.id,
-      plan,
-      cycle,
-      amountCents,
+      plan: "maintenance",
+      cycle: "monthly",
+      amountCents: o.monthlyFeeCents,
       phone,
       createdAt: new Date().toISOString(),
     }).returning();
 
     const { invoiceId, state } = await intasendStkPush({
-      amountKes: Math.round(amountCents / 100),
+      amountKes: Math.round(o.monthlyFeeCents / 100),
       phone,
       apiRef: `zeno-sub-${row.id}`,
-      narrative: `Zeno ${PLANS[plan].name} plan (${cycle})`,
+      narrative: `Zeno maintenance fee — ${o.name}`,
     });
 
     await db.update(billingPayments)
@@ -47,20 +46,19 @@ export async function initiateSubscriptionPaymentAction(plan: PlanKey, cycle: Bi
 }
 
 /** Kick off a card payment via IntaSend hosted checkout — returns a URL to redirect the customer to. */
-export async function initiateCardPaymentAction(plan: PlanKey, cycle: BillingCycle, email: string) {
+export async function initiateCardPaymentAction(email: string) {
   try {
     await requirePerm("settings");
     const o = await getOrg();
 
-    if (!PLANS[plan] || plan === "free") return { error: "Invalid plan selected" };
+    if (!o.monthlyFeeCents || o.monthlyFeeCents <= 0) return { error: "No maintenance fee has been set for your account yet — contact us." };
     if (!email || !email.includes("@")) return { error: "Enter a valid email address" };
-    const amountCents = cycle === "annual" ? PLANS[plan].annualCents : PLANS[plan].monthlyCents;
 
     const [row] = await db.insert(billingPayments).values({
       orgId: o.id,
-      plan,
-      cycle,
-      amountCents,
+      plan: "maintenance",
+      cycle: "monthly",
+      amountCents: o.monthlyFeeCents,
       method: "card",
       email,
       createdAt: new Date().toISOString(),
@@ -70,10 +68,10 @@ export async function initiateCardPaymentAction(plan: PlanKey, cycle: BillingCyc
     const origin = `${h.get("x-forwarded-proto") || "https"}://${h.get("host")}`;
 
     const { id, url } = await intasendCheckout({
-      amountKes: Math.round(amountCents / 100),
+      amountKes: Math.round(o.monthlyFeeCents / 100),
       email,
       apiRef: `zeno-sub-${row.id}`,
-      comment: `Zeno ${PLANS[plan].name} plan (${cycle})`,
+      comment: `Zeno maintenance fee — ${o.name}`,
       redirectUrl: `${origin}/settings/billing?payment=${row.id}`,
       host: origin,
     });
@@ -89,7 +87,7 @@ export async function initiateCardPaymentAction(plan: PlanKey, cycle: BillingCyc
 }
 
 /**
- * Poll a pending payment. Returns "complete" once the subscription is active,
+ * Poll a pending payment. Returns "complete" once access is extended,
  * "failed" with a reason, or "pending" while the customer is entering their PIN.
  */
 export async function checkSubscriptionPaymentAction(paymentId: number) {
@@ -123,10 +121,10 @@ export async function checkSubscriptionPaymentAction(paymentId: number) {
 }
 
 /**
- * DEMO ONLY: simulates an upgrade without payment. Gate: SIMULATED_BILLING_ENABLED=true,
- * which must stay unset in production.
+ * DEMO ONLY: simulates a successful payment without real money moving.
+ * Gate: SIMULATED_BILLING_ENABLED=true, which must stay unset in production.
  */
-export async function simulateSubscriptionUpgradeAction(plan: PlanKey, cycle: BillingCycle, _mpesaPhone: string) {
+export async function simulateSubscriptionUpgradeAction() {
   try {
     if (process.env.SIMULATED_BILLING_ENABLED !== "true") {
       return { error: "Simulated billing is disabled." };
@@ -134,24 +132,22 @@ export async function simulateSubscriptionUpgradeAction(plan: PlanKey, cycle: Bi
     await requirePerm("settings");
     const o = await getOrg();
 
-    if (!PLANS[plan]) return { error: "Invalid plan selected" };
-
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     const today = new Date();
-    today.setDate(today.getDate() + (cycle === "annual" ? 365 : 30));
+    today.setDate(today.getDate() + 30);
     const paidUntil = today.toISOString().split("T")[0];
 
     const [existing] = await db.select().from(subscriptions).where(eq(subscriptions.orgId, o.id)).limit(1);
     if (existing) {
-      await db.update(subscriptions).set({ plan, paidUntil, status: subscriptionStatusForDate(paidUntil) }).where(eq(subscriptions.orgId, o.id));
+      await db.update(subscriptions).set({ paidUntil, status: "active" }).where(eq(subscriptions.orgId, o.id));
     } else {
-      await db.insert(subscriptions).values({ orgId: o.id, plan, paidUntil, status: subscriptionStatusForDate(paidUntil), createdAt: new Date().toISOString() });
+      await db.insert(subscriptions).values({ orgId: o.id, plan: "manual", paidUntil, status: "active", createdAt: new Date().toISOString() });
     }
 
     revalidatePath("/", "layout");
     return { success: true };
   } catch (e: any) {
-    return { error: e.message || "Failed to upgrade subscription" };
+    return { error: e.message || "Failed to extend access" };
   }
 }

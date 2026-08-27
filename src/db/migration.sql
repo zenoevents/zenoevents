@@ -1128,3 +1128,20 @@ ALTER TABLE org ADD COLUMN IF NOT EXISTS contract_template TEXT;
 
 -- Projects as hub Phase E: billable expenses persisted onto invoices.
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS billed_document_id INTEGER;
+
+-- Billing model replacement: per-org custom fees + manual payment ledger.
+ALTER TABLE org ADD COLUMN IF NOT EXISTS one_time_fee_cents BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE org ADD COLUMN IF NOT EXISTS monthly_fee_cents BIGINT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS manual_payments (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  kind TEXT NOT NULL,
+  amount_cents BIGINT NOT NULL,
+  paid_on TEXT NOT NULL,
+  method TEXT,
+  note TEXT,
+  recorded_by_email TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_manual_payments_org ON manual_payments(org_id);

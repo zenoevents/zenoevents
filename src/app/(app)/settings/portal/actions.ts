@@ -15,8 +15,6 @@ export async function ensurePortalSlugAction() {
     await requirePerm("settings");
     const o = await getOrg();
     if (o.portalSlug) return { slug: o.portalSlug };
-    const { assertFeatureEntitlement } = await import("@/lib/billing-server");
-    await assertFeatureEntitlement(o.id, "portal");
 
     const base = slugify(o.name);
     for (let i = 0; i < 5; i++) {

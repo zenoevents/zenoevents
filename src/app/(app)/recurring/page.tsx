@@ -6,8 +6,6 @@ import { PageHeader } from "@/components/ui";
 import { RecurringManager, type RecurringRow } from "@/components/RecurringManager";
 import { computeDocument, type TaxClass } from "@/lib/tax";
 import type { DocLineInput } from "@/lib/actions";
-import { UpgradePrompt } from "@/components/UpgradePrompt";
-import { getEntitlements } from "@/lib/billing-server";
 
 export const dynamic = "force-dynamic";
 
@@ -64,15 +62,8 @@ export default async function RecurringPage() {
     };
   });
 
-  const entitlements = await getEntitlements(o.id);
-  const isLocked = !entitlements.limits.recurring;
-
   return (
-    <UpgradePrompt 
-      isLocked={isLocked} 
-      featureName="Recurring Templates" 
-      description="Automate your billing with recurring invoices, bills, and expenses. Available on Standard and Business plans."
-    >
+    <>
       <PageHeader
         title="Recurring Templates"
         subtitle="Automatically generate invoices, bills, or expenses on a schedule"
@@ -87,6 +78,6 @@ export default async function RecurringPage() {
           dueCount={rows.filter((r) => r.active && r.nextRunDate <= new Date().toISOString().slice(0, 10)).length}
         />
       </div>
-    </UpgradePrompt>
+    </>
   );
 }

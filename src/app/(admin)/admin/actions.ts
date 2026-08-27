@@ -3,11 +3,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db, superAdmins, subscriptions, org, announcements } from "@/db";
+import { db, superAdmins, subscriptions, org, announcements, manualPayments } from "@/db";
 import { eq } from "drizzle-orm";
 import { requireSuperAdmin } from "@/lib/super-admin";
 import { logAdminAction } from "@/lib/admin-audit";
-import { PLANS, PlanKey, subscriptionStatusForDate } from "@/lib/billing";
+import { parseKES } from "@/lib/money";
 import { runAndStoreAllOrgChecks } from "@/lib/ledger-integrity";
 import { runOrgBackup, runAllOrgBackups, getBackupDownloadUrl } from "@/lib/org-backup";
 import { reconcileUnconfirmedKopoKopoPayouts } from "@/lib/payments/webhook";
@@ -107,36 +107,93 @@ export async function removeSuperAdminAction(id: number) {
   return { success: true };
 }
 
-/** Set an org's plan and paid-until date (comp/support tool — bypasses payment). */
-export async function setOrgPlanAction(orgId: number, formData: FormData) {
+/** Set an org's access-until date (comp/support tool — bypasses payment).
+ *  Extend it to reactivate/extend a trial or subscription; backdate it to
+ *  effectively lock the org immediately. */
+export async function setAccessAction(orgId: number, formData: FormData) {
   const user = await requireSuperAdmin();
 
-  const plan = String(formData.get("plan") || "") as PlanKey;
   const paidUntil = String(formData.get("paidUntil") || "");
-  if (!(plan in PLANS)) return { error: "Invalid plan" };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidUntil)) return { error: "Pick a valid paid-until date" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidUntil)) return { error: "Pick a valid date" };
 
   const [o] = await db.select({ id: org.id, name: org.name }).from(org).where(eq(org.id, orgId)).limit(1);
   if (!o) return { error: "Org not found" };
 
   const [existing] = await db.select().from(subscriptions).where(eq(subscriptions.orgId, orgId)).limit(1);
-  const before = existing ? `${existing.plan} until ${existing.paidUntil}` : "none";
-  const status = subscriptionStatusForDate(paidUntil);
+  const before = existing ? existing.paidUntil : "none";
+  const today = new Date().toISOString().slice(0, 10);
+  const status = paidUntil >= today ? "active" : "expired";
   if (existing) {
-    await db.update(subscriptions).set({ plan, paidUntil, status }).where(eq(subscriptions.id, existing.id));
+    await db.update(subscriptions).set({ paidUntil, status }).where(eq(subscriptions.id, existing.id));
   } else {
-    await db.insert(subscriptions).values({ orgId, plan, paidUntil, status, createdAt: new Date().toISOString() });
+    await db.insert(subscriptions).values({ orgId, plan: "manual", paidUntil, status, createdAt: new Date().toISOString() });
   }
 
   await logAdminAction({
     actorEmail: user.email!,
-    action: "plan_change",
+    action: "access_change",
     targetType: "org",
     targetId: orgId,
-    detail: `${o.name || `Org #${orgId}`}: ${before} → ${plan} until ${paidUntil}`,
+    detail: `${o.name || `Org #${orgId}`}: ${before} → ${paidUntil}`,
   });
   revalidatePath(`/admin/orgs/${orgId}`);
   revalidatePath("/admin/subscriptions");
+  revalidatePath("/admin/revenue");
+  return { success: true };
+}
+
+/** Set an org's custom one-time and/or monthly maintenance fee. */
+export async function setFeesAction(orgId: number, formData: FormData) {
+  const user = await requireSuperAdmin();
+
+  const oneTimeFeeCents = Math.round(parseKES(String(formData.get("oneTimeFee") || "0")) || 0);
+  const monthlyFeeCents = Math.round(parseKES(String(formData.get("monthlyFee") || "0")) || 0);
+  if (oneTimeFeeCents < 0 || monthlyFeeCents < 0) return { error: "Fees can't be negative" };
+
+  const [o] = await db.select({ id: org.id, name: org.name }).from(org).where(eq(org.id, orgId)).limit(1);
+  if (!o) return { error: "Org not found" };
+
+  await db.update(org).set({ oneTimeFeeCents, monthlyFeeCents }).where(eq(org.id, orgId));
+  await logAdminAction({
+    actorEmail: user.email!,
+    action: "fees_change",
+    targetType: "org",
+    targetId: orgId,
+    detail: `${o.name || `Org #${orgId}`}: one-time ${oneTimeFeeCents / 100}, monthly ${monthlyFeeCents / 100}`,
+  });
+  revalidatePath(`/admin/orgs/${orgId}`);
+  return { success: true };
+}
+
+/** Record a payment received off-app (bank transfer, M-Pesa, cash, ...) against an org's one-time or maintenance fee. */
+export async function recordManualPaymentAction(orgId: number, formData: FormData) {
+  const user = await requireSuperAdmin();
+
+  const kind = String(formData.get("kind") || "");
+  if (kind !== "one_time" && kind !== "maintenance") return { error: "Invalid fee kind" };
+  const amountCents = Math.round(parseKES(String(formData.get("amount") || "0")) || 0);
+  if (amountCents <= 0) return { error: "Enter an amount greater than 0" };
+  const paidOn = String(formData.get("paidOn") || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) return { error: "Pick a valid date" };
+  const method = String(formData.get("method") || "").trim() || null;
+  const note = String(formData.get("note") || "").trim() || null;
+
+  const [o] = await db.select({ id: org.id, name: org.name }).from(org).where(eq(org.id, orgId)).limit(1);
+  if (!o) return { error: "Org not found" };
+
+  await db.insert(manualPayments).values({
+    orgId, kind, amountCents, paidOn, method, note,
+    recordedByEmail: user.email,
+    createdAt: new Date().toISOString(),
+  });
+  await logAdminAction({
+    actorEmail: user.email!,
+    action: "manual_payment_record",
+    targetType: "org",
+    targetId: orgId,
+    detail: `${o.name || `Org #${orgId}`}: ${kind} ${amountCents / 100} on ${paidOn}${method ? ` via ${method}` : ""}`,
+  });
+  revalidatePath(`/admin/orgs/${orgId}`);
   revalidatePath("/admin/revenue");
   return { success: true };
 }

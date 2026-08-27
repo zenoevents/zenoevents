@@ -8,7 +8,8 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { AiAssistantPill } from "@/components/AiAssistantPill";
-import { getEntitlements } from "@/lib/billing-server";
+import { getBillingAccess } from "@/lib/billing-server";
+import { AccessLockedScreen } from "@/components/AccessLockedScreen";
 import { getDailyBrief } from "@/lib/ai/brief";
 import { db, announcements, teamAnnouncements } from "@/db";
 import { eq, desc, and } from "drizzle-orm";
@@ -48,15 +49,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Signed in but neither owner nor staff — needs onboarding
   if (!access || !access.orgRow.name) redirect("/onboarding");
 
-  const ents = await getEntitlements(access.orgRow.id);
-  const planBadgeText =
-    ents.status === "expired"
-      ? `Expired ${ents.subscriptionPlan === "free" ? "Free" : ents.subscriptionPlan === "standard" ? "Standard" : "Business"}`
-      : ents.plan === "free"
-        ? "Free Plan"
-        : ents.plan === "standard"
-          ? "Standard Plan"
-          : "Business Plan";
+  const billingAccess = await getBillingAccess(access.orgRow.id);
+  if (billingAccess.status === "locked" && !isImpersonating) {
+    return <AccessLockedScreen orgName={access.orgRow.name} />;
+  }
   const [announcement, brief, pinnedTeamAnnouncements] = await Promise.all([
     db.select().from(announcements).where(eq(announcements.active, true)).orderBy(desc(announcements.createdAt)).limit(1).then((r) => r[0]),
     getDailyBrief(access).catch(() => null),
@@ -98,14 +94,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <div className="flex-1 hidden md:flex items-center gap-3 max-w-[150px]">
               <Link
                 href="/settings/billing"
-                className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
-                  ents.status === "expired"
-                    ? "bg-red-50 text-red-700 hover:bg-red-100"
-                    : "bg-[var(--color-brand)]/10 text-[var(--color-brand)] hover:bg-[var(--color-brand)]/20"
-                }`}
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full transition-colors bg-[var(--color-brand)]/10 text-[var(--color-brand)] hover:bg-[var(--color-brand)]/20"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ents.status === "expired" ? "M12 8v4m0 4h.01M10.29 3.86l-7.12 12.3A2 2 0 004.88 19h14.24a2 2 0 001.71-2.84l-7.12-12.3a2 2 0 00-3.42 0z" : "M5 13l4 4L19 7"} /></svg>
-                {planBadgeText}
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                Active
               </Link>
             </div>
             <div className="flex-1 flex items-center gap-2 max-w-md mx-auto md:hidden">

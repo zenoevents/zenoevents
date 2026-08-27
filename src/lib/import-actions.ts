@@ -234,8 +234,6 @@ export interface InvoiceRow {
   taxClass: string;
 }
 
-import { getEntitlements, getInvoiceUsage } from "./billing-server";
-
 /**
  * Imports invoices as DRAFTS (grouped by invoiceRef). Customers matched by
  * name, created if missing. Review + issue each draft to post it (and get
@@ -251,15 +249,6 @@ export async function importInvoices(rows: InvoiceRow[]): Promise<{ created?: nu
       const list = groups.get(key) ?? [];
       list.push(r);
       groups.set(key, list);
-    }
-
-    const ents = await getEntitlements(orgId);
-    if (ents.limits.invoices !== -1) {
-      const currentUsage = await getInvoiceUsage(orgId);
-      const remaining = Math.max(0, ents.limits.invoices - currentUsage);
-      if (groups.size > remaining) {
-        throw new Error(`Quota exceeded: Your plan allows ${remaining} more invoices this month, but this CSV contains ${groups.size} invoices.`);
-      }
     }
 
     const contactRows = await db

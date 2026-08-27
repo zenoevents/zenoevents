@@ -1800,13 +1800,6 @@ export async function saveDocument(data: Parameters<typeof _saveDocument>[0]) {
     data.createdByName = access.memberName;
     data.createdByRole = access.isOwner ? "owner" : access.role;
   }
-  // Plan cap covers new invoices/quotes only — editing a draft or creating
-  // bills/expenses/etc doesn't consume it. Server-side check: the page-level
-  // UpgradePrompt is cosmetic and doesn't stop a direct call to this action.
-  if (!data.id && (data.type === "invoice" || data.type === "quote") && access) {
-    const { assertInvoiceCapacity } = await import("./billing-server");
-    await assertInvoiceCapacity(access.orgId);
-  }
   const docId = await withOrg(() => _saveDocument(data), { requireWrite: true });
   const [saved] = await db.select({ number: documents.number }).from(documents).where(eq(documents.id, docId)).limit(1);
   await logAudit({

@@ -4,7 +4,7 @@ import { db, org, subscriptions } from "@/db";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { ImpersonateButton } from "./ImpersonateButton";
-import { subscriptionStatusForDate } from "@/lib/billing";
+import { resolveAccess } from "@/lib/billing";
 
 export default async function OrgsPage() {
   const today = new Date().toISOString().slice(0, 10);
@@ -37,7 +37,7 @@ export default async function OrgsPage() {
                 <th className="px-4 py-3 font-medium">ID</th>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Contact</th>
-                <th className="px-4 py-3 font-medium">Plan</th>
+                <th className="px-4 py-3 font-medium">Access</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -45,7 +45,7 @@ export default async function OrgsPage() {
               {orgsWithSubs.map((o) => (
                 <tr key={o.id} className="hover:bg-[var(--color-ink-50)] transition-colors">
                   {(() => {
-                    const status = o.paidUntil ? subscriptionStatusForDate(o.paidUntil, today) : "active";
+                    const status = resolveAccess(o.paidUntil ?? today, today).status;
                     return (
                       <>
                   <td className="px-4 py-3 text-[var(--color-ink-500)]">{o.id}</td>
@@ -58,13 +58,9 @@ export default async function OrgsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      !o.plan ? "bg-gray-100 text-gray-800"
-                        : status === "expired" ? "bg-red-100 text-red-800"
-                        : o.plan === "business" ? "bg-purple-100 text-purple-800"
-                        : o.plan === "standard" ? "bg-blue-100 text-blue-800"
-                        : "bg-gray-100 text-gray-800"
+                      status === "locked" ? "bg-red-100 text-red-800" : "bg-emerald-100 text-emerald-800"
                     }`}>
-                      {!o.plan ? "Free" : status === "expired" ? `${o.plan} expired` : o.plan}
+                      {status === "locked" ? "Locked" : "Active"}
                     </span>
                   </td>
                   <td className="px-4 py-3 flex items-center gap-3">

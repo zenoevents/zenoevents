@@ -1,7 +1,5 @@
 import { requirePerm } from "@/lib/guard";
 import { getOrg, withOrg } from "@/lib/org";
-import { getEntitlements } from "@/lib/billing-server";
-import { meetsReportingTier, ReportingTier } from "@/lib/billing";
 import { PageHeader } from "@/components/ui";
 import { fmtKES } from "@/lib/money";
 import { db, items, employees } from "@/db";
@@ -14,7 +12,10 @@ import { fakeTrend, fakeRanked, fakeBuckets, fakeStacked } from "./placeholders"
 
 export const dynamic = "force-dynamic";
 
-const TIER_LABEL: Record<ReportingTier, string> = { basic: "Free", standard: "Standard", advanced: "Business" };
+// Every section is available to any active org now — no more reporting-tier
+// ladder. Kept as an inert lookup only because LockedCard still needs a
+// planLabel prop; `has()` below always returns true so it never renders.
+const TIER_LABEL = { basic: "Free", standard: "Standard", advanced: "Business" };
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
@@ -45,9 +46,7 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub?:
 export default async function AnalyticsPage() {
   await requirePerm("reports");
   const o = await getOrg();
-  const ents = await getEntitlements(o.id);
-  const tier = ents.limits.reporting;
-  const has = (need: ReportingTier) => meetsReportingTier(tier, need);
+  const has = (_need?: string) => true;
 
   const [hasInventory, hasEmployees] = await withOrg(() =>
     Promise.all([

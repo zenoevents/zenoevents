@@ -482,8 +482,6 @@ export async function saveRecurringTemplate(data: {
 }) {
   return withOrg(async () => {
     const orgId = currentOrgId();
-    const { assertFeatureEntitlement } = await import("./billing-server");
-    await assertFeatureEntitlement(orgId, "recurring");
     if (!data.name.trim()) throw new Error("Give the recurring template a name");
     if (data.lines.length === 0) throw new Error("Add at least one line");
     if (data.docType !== "expense" && !data.contactId) throw new Error("Choose a contact");

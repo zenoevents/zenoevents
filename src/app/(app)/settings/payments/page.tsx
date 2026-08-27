@@ -8,8 +8,6 @@ import { decryptConfig } from "@/lib/payments/crypto";
 import { PageHeader } from "@/components/ui";
 import { PaymentGatewayForm } from "./PaymentGatewayForm";
 import { MpesaTillSettings } from "./MpesaTillSettings";
-import { UpgradePrompt } from "@/components/UpgradePrompt";
-import { getEntitlements } from "@/lib/billing-server";
 import { previewMpesaTillReconciliation } from "@/lib/mpesa-till-reconcile";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +17,6 @@ export default async function PaymentsSettingsPage() {
   const o = await getOrg();
   const user = await getUser();
   if (!user || !o) redirect("/login");
-
-  const entitlements = await getEntitlements(o.id);
-  const isLocked = !entitlements.limits.gateways;
 
   const gateways = await db.select().from(paymentGateways).where(eq(paymentGateways.orgId, o.id));
   const connectedGatewayIds = gateways.filter((g) => g.enabled).map((g) => g.gatewayId);
@@ -43,11 +38,7 @@ export default async function PaymentsSettingsPage() {
   });
 
   return (
-    <UpgradePrompt 
-      isLocked={isLocked} 
-      featureName="Payment Gateways" 
-      description="Automated payment integrations like M-Pesa are available on Standard and Business plans."
-    >
+    <>
       <div className="max-w-4xl mx-auto pb-12 min-h-[70vh]">
         <PageHeader
           title="Payment Gateways"
@@ -63,6 +54,6 @@ export default async function PaymentsSettingsPage() {
           />
         </div>
       </div>
-    </UpgradePrompt>
+    </>
   );
 }

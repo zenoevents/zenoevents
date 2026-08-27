@@ -13,8 +13,6 @@ export async function savePaymentGatewayAction(formData: FormData) {
   return withOrg(async () => {
     await requirePerm("settings");
     const o = await getOrg();
-    const { assertFeatureEntitlement } = await import("@/lib/billing-server");
-    await assertFeatureEntitlement(o.id, "gateways");
 
     const gatewayId = formData.get("gatewayId") as string;
     const environment = formData.get("environment") as string || "sandbox";

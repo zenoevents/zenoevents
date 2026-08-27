@@ -122,6 +122,11 @@ export const org = pgTable("org", {
    *  pattern as expenseClaimPayoutGatewayId, just for vendor bill payouts.
    *  Null falls back to whichever connected gateway sorts first. */
   billPayoutGatewayId: text("bill_payout_gateway_id"),
+  /** Admin-set, per-org custom fees — replaces the old fixed plan-tier
+   *  pricing. Not a subscription price list: each org negotiates its own
+   *  number, editable only from the super-admin org detail page. */
+  oneTimeFeeCents: money("one_time_fee_cents").notNull().default(0),
+  monthlyFeeCents: money("monthly_fee_cents").notNull().default(0),
 });
 
 export const accounts = pgTable("accounts", {
@@ -1171,6 +1176,25 @@ export const billingPayments = pgTable("billing_payments", {
 }, (t) => ({
   orgIdx: index("idx_billing_payments_org").on(t.orgId),
   invoiceUnique: uniqueIndex("idx_billing_payments_invoice").on(t.invoiceId),
+}));
+
+/** Admin-recorded ledger for the new manual-billing model — payment
+ *  received off-app (bank transfer, M-Pesa, cash) against an org's
+ *  one-time or monthly maintenance fee, logged by the super-admin after
+ *  the fact. Separate from billingPayments (the automated IntaSend
+ *  self-serve flow, kept as an optional "Pay now" path). */
+export const manualPayments = pgTable("manual_payments", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  kind: text("kind").notNull(), // one_time | maintenance
+  amountCents: money("amount_cents").notNull(),
+  paidOn: text("paid_on").notNull(), // ISO date
+  method: text("method"), // free text — "Bank transfer", "M-Pesa", "Cash", etc.
+  note: text("note"),
+  recordedByEmail: text("recorded_by_email"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgIdx: index("idx_manual_payments_org").on(t.orgId),
 }));
 
 /** Staff-submitted expense claims for reimbursement — separate from vendor bills/expenses. */

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, aiMessages } from "@/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getAccess } from "@/lib/access";
-import { getEntitlements } from "@/lib/billing-server";
 import { nairobiDateISO } from "@/lib/timezone";
 import { runAssistantTurn, type ChatMessage } from "@/lib/ai/llm";
 
@@ -19,18 +18,6 @@ export async function POST(req: NextRequest) {
 
   const today = nairobiDateISO();
   const memberCond = access.memberId ? eq(aiMessages.memberId, access.memberId) : isNull(aiMessages.memberId);
-
-  const ents = await getEntitlements(access.orgId);
-  const cap = ents.limits.aiMessagesPerDay;
-  if (cap >= 0) {
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(aiMessages)
-      .where(and(eq(aiMessages.orgId, access.orgId), eq(aiMessages.role, "user"), eq(aiMessages.nairobiDate, today)));
-    if (count >= cap) {
-      return NextResponse.json({ error: `AI message limit reached for today (${cap}/day on your plan). Upgrade for more.` }, { status: 429 });
-    }
-  }
 
   const historyRows = await db
     .select()
