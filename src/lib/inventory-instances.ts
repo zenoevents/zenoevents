@@ -8,6 +8,7 @@ import { nowISO } from "@/lib/money";
 import { logAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import type { InventoryStatus } from "@/lib/inventory-status";
+import { saveItem } from "@/lib/actions";
 
 /** Durable, rentable inventory instances/batches — chairs, tents, AV gear —
  *  distinct from the FIFO consumable stock in stockLots (src/lib/inventory.ts). */
@@ -66,6 +67,18 @@ export async function countInventoryInstancesByItem(): Promise<Record<number, nu
   });
 }
 
+async function insertInventoryInstance(orgId: number, itemId: number, label: string, qty: number, warehouseId: number | null) {
+  await db.insert(inventoryItems).values({
+    orgId, itemId, label, qty, warehouseId,
+    condition: "good",
+    status: "in_store",
+    createdAt: nowISO(),
+  });
+  await logAudit({ action: "inventory_item.create", module: "projects", recordLabel: label });
+  revalidatePath("/projects/inventory");
+  revalidatePath("/items");
+}
+
 export async function createInventoryInstanceAction(formData: FormData) {
   await requirePerm("projects");
   return withOrg(async () => {
@@ -80,17 +93,68 @@ export async function createInventoryInstanceAction(formData: FormData) {
       throw new Error("Item, label, and a positive quantity are required");
     }
 
-    await db.insert(inventoryItems).values({
-      orgId, itemId, label, qty, warehouseId,
-      condition: "good",
-      status: "in_store",
-      createdAt: nowISO(),
-    });
-
-    await logAudit({ action: "inventory_item.create", module: "projects", recordLabel: label });
-    revalidatePath("/projects/inventory");
+    await insertInventoryInstance(orgId, itemId, label, qty, warehouseId);
     return { success: true };
   });
+}
+
+/**
+ * The single "New item" flow for Event Inventory — either picks an existing
+ * catalog item, or creates one on the fly (mirroring createItemFromLine's
+ * precedent in actions.ts: a new catalog item can be created from a
+ * different permission surface without requiring the separate "items"
+ * permission, since the caller's own page — here, "projects" — already
+ * gates it) with sensible rental-gear defaults, then creates the first
+ * batch against it either way. Not a data-model change: still the same
+ * saveItem()/inventoryItems insert as always, just one round-trip instead
+ * of two page visits.
+ */
+export async function createInventoryItemWithCatalogAction(formData: FormData): Promise<{ success: true } | { error: string }> {
+  try {
+    await requirePerm("projects");
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const label = (formData.get("label") as string)?.trim();
+      const qty = parseFloat((formData.get("qty") as string) || "1");
+      const warehouseIdRaw = formData.get("warehouseId") as string;
+      const warehouseId = warehouseIdRaw ? parseInt(warehouseIdRaw, 10) : null;
+      if (!label || !Number.isFinite(qty) || qty <= 0) {
+        throw new Error("Label and a positive quantity are required");
+      }
+
+      const mode = formData.get("mode") as string;
+      let itemId: number;
+
+      if (mode === "existing") {
+        itemId = parseInt(formData.get("itemId") as string, 10);
+        if (!itemId) throw new Error("Pick a catalog item");
+      } else {
+        const name = (formData.get("newItemName") as string)?.trim();
+        if (!name) throw new Error("Name is required for a new catalog item");
+        itemId = await saveItem({
+          kind: (formData.get("kind") as string) || "goods",
+          itemGroupId: formData.get("itemGroupId") ? Number(formData.get("itemGroupId")) : null,
+          name,
+          sku: (formData.get("sku") as string) || undefined,
+          unit: (formData.get("unit") as string) || "unit",
+          salePriceCents: Math.round(parseFloat((formData.get("salePrice") as string) || "0") * 100) || 0,
+          purchaseCostCents: Math.round(parseFloat((formData.get("purchaseCost") as string) || "0") * 100) || 0,
+          taxClass: (formData.get("taxClass") as string) || "B16",
+          // Rental gear cycles out and back — it's never FIFO-consumed like
+          // sold/used stock, so this is always false for an item created
+          // from this flow (matches every existing rental catalog item).
+          trackInventory: false,
+          reorderLevel: 0,
+          purchaseAccountId: formData.get("purchaseAccountId") ? Number(formData.get("purchaseAccountId")) : null,
+        });
+      }
+
+      await insertInventoryInstance(orgId, itemId, label, qty, warehouseId);
+      return { success: true };
+    });
+  } catch (err: any) {
+    return { error: err?.message || "Could not create this item" };
+  }
 }
 
 export async function updateInventoryStatusAction(id: number, status: InventoryStatus) {

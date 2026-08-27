@@ -1,73 +1,45 @@
 import { requirePerm } from "@/lib/guard";
-import { createInventoryInstanceAction, listCatalogItems } from "@/lib/inventory-instances";
+import { listCatalogItems } from "@/lib/inventory-instances";
 import { listWarehouses } from "@/lib/warehouses";
-import { PageHeader, PrimaryButton } from "@/components/ui";
-import { redirect } from "next/navigation";
+import { listItemGroups } from "@/lib/item-groups";
+import { listItemTypes } from "@/lib/item-types";
+import { getOrg } from "@/lib/org";
+import { PageHeader } from "@/components/ui";
+import { NewInventoryItemForm } from "./NewInventoryItemForm";
+import { db, accounts } from "@/db";
+import { and, eq, inArray } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-const input =
-  "w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)] focus:ring-2 focus:ring-[var(--color-accent-100)] mt-1";
-const label = "text-[12px] font-medium text-[var(--color-ink-600)]";
-
 export default async function NewInventoryInstancePage() {
   await requirePerm("projects");
-  const [catalogItems, warehouses] = await Promise.all([listCatalogItems(), listWarehouses()]);
-
-  async function submit(formData: FormData) {
-    "use server";
-    await createInventoryInstanceAction(formData);
-    redirect("/projects/inventory");
-  }
+  const [catalogItems, warehouses, groups, types, o] = await Promise.all([
+    listCatalogItems(),
+    listWarehouses(),
+    listItemGroups(),
+    listItemTypes(),
+    getOrg(),
+  ]);
+  const expenseAccounts = await db
+    .select({ id: accounts.id, code: accounts.code, name: accounts.name })
+    .from(accounts)
+    .where(and(eq(accounts.orgId, o.id), inArray(accounts.type, ["expense"]), eq(accounts.archived, false)))
+    .orderBy(accounts.code);
 
   return (
     <>
-      <PageHeader title="New inventory item" subtitle="A unit or a labeled batch — one row you'll reserve, dispatch, and return as a whole." />
-      <form action={submit} className="card p-6 max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <label className="block col-span-2">
-          <span className={label}>Catalog item</span>
-          <select name="itemId" required defaultValue="" className={input}>
-            <option value="" disabled>Select an item…</option>
-            {catalogItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-          </select>
-          {catalogItems.length === 0 ? (
-            <p className="text-[11px] text-[var(--color-bad)] mt-1">
-              No catalog items yet —{" "}
-              <a href="/items/new?returnTo=/projects/inventory/new" className="underline font-medium">
-                create one now
-              </a>{" "}
-              (e.g. "Chiavari Chair"), you'll land right back here.
-            </p>
-          ) : (
-            <a href="/items/new?returnTo=/projects/inventory/new" className="inline-block text-[11.5px] text-[var(--color-accent-600)] hover:underline mt-1">
-              + New catalog item
-            </a>
-          )}
-        </label>
-
-        <label className="block">
-          <span className={label}>Label</span>
-          <input name="label" type="text" required placeholder="e.g. Set B, or a serial number" className={input} />
-        </label>
-
-        <label className="block">
-          <span className={label}>Quantity in this batch</span>
-          <input name="qty" type="number" step="1" min="1" defaultValue="1" className={input} />
-          <p className="text-[11px] text-[var(--color-ink-400)] mt-1">1 for a single serialized unit, more for a labeled batch (e.g. "Set B — 40 chairs").</p>
-        </label>
-
-        <label className="block col-span-2">
-          <span className={label}>Warehouse</span>
-          <select name="warehouseId" defaultValue="" className={input}>
-            <option value="">Default warehouse</option>
-            {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-        </label>
-
-        <div className="col-span-2 pt-1">
-          <PrimaryButton className="px-5 py-2.5">Add to inventory</PrimaryButton>
-        </div>
-      </form>
+      <PageHeader title="New inventory item" subtitle="Pick from the catalog, or create a brand-new one — either way you'll end up with a batch you can reserve, dispatch, and return." />
+      <NewInventoryItemForm
+        catalogItems={catalogItems}
+        warehouses={warehouses}
+        types={types}
+        groups={groups.map((g) => ({ id: g.id, name: g.name, appliesTo: g.appliesTo }))}
+        groupsRequired={o.itemGroupsEnabled}
+        expenseAccounts={expenseAccounts}
+      />
+      <a href="/items/new?returnTo=/projects/inventory/new" className="inline-block mt-3 text-[12px] text-[var(--color-ink-400)] hover:underline">
+        Need SKU, description, or more control? Use the full Items &amp; Stock form →
+      </a>
     </>
   );
 }
