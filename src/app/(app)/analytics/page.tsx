@@ -2,11 +2,14 @@ import { requirePerm } from "@/lib/guard";
 import { getOrg, withOrg } from "@/lib/org";
 import { PageHeader } from "@/components/ui";
 import { fmtKES } from "@/lib/money";
-import { db, items, employees } from "@/db";
+import { db, items, employees, projects } from "@/db";
 import { eq, and } from "drizzle-orm";
 import * as A from "@/lib/analytics";
 import { aging } from "@/lib/reports";
-import { TrendAreaChart, TrendLineChart, RankBarChart, CategoryBarChart, StackedBarChart, BreakdownDonut } from "@/components/analytics/Charts";
+import {
+  TrendAreaChart, TrendLineChart, RankBarChart, CategoryBarChart, StackedBarChart, BreakdownDonut,
+  RadialRingChart, RadialTrendChart, NestedDonut, RangeBarChart, BudgetScatterChart, FlowSankey, RadarProfileChart, FunnelStages,
+} from "@/components/analytics/Charts";
 import { LockedCard } from "@/components/analytics/LockedCard";
 import { fakeTrend, fakeRanked, fakeBuckets, fakeStacked } from "./placeholders";
 
@@ -48,12 +51,31 @@ export default async function AnalyticsPage() {
   const o = await getOrg();
   const has = (_need?: string) => true;
 
-  const [hasInventory, hasEmployees] = await withOrg(() =>
+  const [hasInventory, hasEmployees, hasEvents] = await withOrg(() =>
     Promise.all([
       db.select({ id: items.id }).from(items).where(and(eq(items.orgId, o.id), eq(items.trackInventory, true))).limit(1).then((r) => r.length > 0),
       db.select({ id: employees.id }).from(employees).where(eq(employees.orgId, o.id)).limit(1).then((r) => r.length > 0),
+      db.select({ id: projects.id }).from(projects).where(eq(projects.orgId, o.id)).limit(1).then((r) => r.length > 0),
     ])
   );
+
+  const [
+    marginByType, seasonalCurve, bookingsByType, leadTimeRange,
+    budgetScatter, billingFlow, perfProfile, funnelStages,
+  ] = hasEvents
+    ? await withOrg(() =>
+        Promise.all([
+          A.marginByEventType(),
+          A.seasonalBookingCurve(),
+          A.bookingsByTypeAndStatus(),
+          A.bookingLeadTimeRange(),
+          A.budgetVsActualScatter(),
+          A.bookingToBillingFlow(),
+          A.eventTypePerformanceProfile(),
+          A.salesFunnelStages(),
+        ])
+      )
+    : [[], [], { outer: [], inner: [] }, [], [], { nodes: [], links: [] }, { data: [], series: [] }, []];
 
   // Fetch only what the plan entitles — locked tiles get placeholder shapes, never real numbers.
   const [
@@ -337,6 +359,39 @@ export default async function AnalyticsPage() {
             </LockedCard>
           </div>
         </div>
+
+        {/* Events */}
+        {hasEvents && (
+          <div className="space-y-4">
+            <Section title="Events" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card title="Margin by event type" subtitle="(Invoiced − cost) ÷ invoiced, per type">
+                <RadialRingChart data={marginByType} />
+              </Card>
+              <Card title="Seasonal booking curve" subtitle="Events by month — where the bulge is is your busy season">
+                <RadialTrendChart data={seasonalCurve} />
+              </Card>
+              <Card title="Bookings by type & status" subtitle="Outer ring: event type · inner ring: status">
+                <NestedDonut outer={bookingsByType.outer} inner={bookingsByType.inner} centerLabel="projects" />
+              </Card>
+              <Card title="Booking lead time" subtitle="Days between project created and event date, by month">
+                <RangeBarChart data={leadTimeRange} unit="d" />
+              </Card>
+              <Card title="Budget vs. actual invoiced" subtitle="One dot per project — above the line means over budget">
+                <BudgetScatterChart series={budgetScatter} />
+              </Card>
+              <Card title="Booking → billing flow" subtitle="Leads through to collected revenue">
+                <FlowSankey nodes={billingFlow.nodes} links={billingFlow.links} />
+              </Card>
+              <Card title="Event performance profile" subtitle="Margin, damage-free rate, reconciliation rate, repeat clients">
+                <RadarProfileChart data={perfProfile.data} series={perfProfile.series} />
+              </Card>
+              <Card title="Sales funnel" subtitle="Lead → Quoted → Confirmed → Completed">
+                <FunnelStages data={funnelStages} />
+              </Card>
+            </div>
+          </div>
+        )}
 
         {/* Compliance & Books Health */}
         <div className="space-y-4">

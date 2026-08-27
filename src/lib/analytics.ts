@@ -2,10 +2,11 @@ import {
   db, documents, documentLines, contacts, items, stockLots,
   expenseClaims, employees, payrollRuns, payrollRunLineItems, timeShifts, deals,
   accounts, bankTransactions, journalEntries, journalLines,
+  projects, damageReports, manifests, reservations,
 } from "@/db";
 import { SYS } from "./coa";
 import { currentOrgId } from "@/lib/org";
-import { and, eq, gte, lte, inArray, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, inArray, sql, desc, ne, isNotNull } from "drizzle-orm";
 import { accountBalances, profitAndLoss, cashFlowStatement, vatReturn, aging } from "./reports";
 
 /**
@@ -503,4 +504,235 @@ export async function booksHealth(orgLockDate: string | null) {
     lockDate: orgLockDate,
     lastReconciliationDate: lastReconRow,
   };
+}
+
+/* ---------------- Events analytics ---------------- */
+
+const EVENT_TYPE_LABEL = "Uncategorized";
+
+/** Every non-cancelled project's financials, grouped by eventType — the
+ *  shared base most of the events charts below aggregate from. */
+async function projectFinancialsByType() {
+  const orgId = currentOrgId();
+  const rows = await db
+    .select({
+      projectId: projects.id,
+      eventType: projects.eventType,
+      status: projects.status,
+      budgetCents: projects.budgetCents,
+      contactId: projects.contactId,
+      createdAt: projects.createdAt,
+      eventDate: projects.eventDate,
+    })
+    .from(projects)
+    .where(and(eq(projects.orgId, orgId), ne(projects.status, "cancelled")));
+
+  const projectIds = rows.map((r) => r.projectId);
+  const docTotals = projectIds.length === 0 ? [] : await db
+    .select({
+      projectId: documents.projectId,
+      type: documents.type,
+      totalCents: sql<number>`coalesce(sum(${documents.totalCents}), 0)`,
+    })
+    .from(documents)
+    .where(and(eq(documents.orgId, orgId), inArray(documents.projectId, projectIds), ne(documents.status, "void")))
+    .groupBy(documents.projectId, documents.type);
+
+  const invoicedByProject = new Map<number, number>();
+  const costByProject = new Map<number, number>();
+  for (const d of docTotals) {
+    if (!d.projectId) continue;
+    if (d.type === "invoice") invoicedByProject.set(d.projectId, (invoicedByProject.get(d.projectId) ?? 0) + Number(d.totalCents));
+    if (d.type === "bill" || d.type === "expense") costByProject.set(d.projectId, (costByProject.get(d.projectId) ?? 0) + Number(d.totalCents));
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    eventType: r.eventType || EVENT_TYPE_LABEL,
+    invoicedCents: invoicedByProject.get(r.projectId) ?? 0,
+    costCents: costByProject.get(r.projectId) ?? 0,
+  }));
+}
+
+/** #1 Radial ring — margin % by event type. */
+export async function marginByEventType() {
+  const projectsWithFinancials = await projectFinancialsByType();
+  const byType = new Map<string, { invoiced: number; cost: number }>();
+  for (const p of projectsWithFinancials) {
+    const entry = byType.get(p.eventType) ?? { invoiced: 0, cost: 0 };
+    entry.invoiced += p.invoicedCents;
+    entry.cost += p.costCents;
+    byType.set(p.eventType, entry);
+  }
+  return [...byType.entries()]
+    .filter(([, v]) => v.invoiced > 0)
+    .map(([name, v]) => ({ name, pct: Math.max(0, Math.min(100, Math.round(((v.invoiced - v.cost) / v.invoiced) * 100))) }))
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 6);
+}
+
+/** #2 Radial trend — event count by calendar month, trailing 12mo, as a closed loop. */
+export async function seasonalBookingCurve() {
+  const orgId = currentOrgId();
+  const rows = await db
+    .select({ month: sql<string>`to_char(${projects.eventDate}::date, 'Mon')`, monthNum: sql<number>`extract(month from ${projects.eventDate}::date)` , count: sql<number>`count(*)`.mapWith(Number) })
+    .from(projects)
+    .where(and(eq(projects.orgId, orgId), ne(projects.status, "cancelled")))
+    .groupBy(sql`to_char(${projects.eventDate}::date, 'Mon'), extract(month from ${projects.eventDate}::date)`);
+
+  const byMonth = new Map(rows.map((r) => [Number(r.monthNum), r.count]));
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return monthLabels.map((label, i) => ({ label, value: byMonth.get(i + 1) ?? 0 }));
+}
+
+/** #3 Nested donut — bookings by event type (outer), by status (inner). */
+export async function bookingsByTypeAndStatus() {
+  const projectsWithFinancials = await projectFinancialsByType();
+  const byType = new Map<string, number>();
+  const byStatus = new Map<string, number>();
+  for (const p of projectsWithFinancials) {
+    byType.set(p.eventType, (byType.get(p.eventType) ?? 0) + 1);
+    byStatus.set(p.status, (byStatus.get(p.status) ?? 0) + 1);
+  }
+  return {
+    outer: [...byType.entries()].map(([name, value]) => ({ name, value })),
+    inner: [...byStatus.entries()].map(([name, value]) => ({ name, value })),
+  };
+}
+
+/** #4 Range bar — booking lead time (days between project created and event date), by month. */
+export async function bookingLeadTimeRange() {
+  const projectsWithFinancials = await projectFinancialsByType();
+  const byMonth = new Map<string, number[]>();
+  for (const p of projectsWithFinancials) {
+    const created = new Date(p.createdAt);
+    const eventDate = new Date(p.eventDate);
+    const days = Math.round((eventDate.getTime() - created.getTime()) / 86400000);
+    if (!Number.isFinite(days) || days < 0) continue;
+    const key = eventDate.toLocaleDateString("en-KE", { month: "short" });
+    const arr = byMonth.get(key) ?? [];
+    arr.push(days);
+    byMonth.set(key, arr);
+  }
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return monthLabels
+    .map((label) => ({ label, days: byMonth.get(label) }))
+    .filter((m) => m.days && m.days.length > 0)
+    .map((m) => ({ label: m.label, range: [Math.min(...m.days!), Math.max(...m.days!)] as [number, number] }));
+}
+
+/** #5 Scatter — budget vs actual invoiced, one dot per project, by event type. */
+export async function budgetVsActualScatter() {
+  const projectsWithFinancials = await projectFinancialsByType();
+  const byType = new Map<string, { x: number; y: number; label: string }[]>();
+  for (const p of projectsWithFinancials) {
+    if (!p.budgetCents || p.budgetCents <= 0) continue;
+    const arr = byType.get(p.eventType) ?? [];
+    arr.push({ x: p.budgetCents, y: p.invoicedCents, label: p.eventType });
+    byType.set(p.eventType, arr);
+  }
+  return [...byType.entries()].map(([name, points]) => ({ name, points }));
+}
+
+/** #6 Sankey — booking → billing flow. */
+export async function bookingToBillingFlow() {
+  const orgId = currentOrgId();
+  const statusRows = await db
+    .select({ status: projects.status, count: sql<number>`count(*)`.mapWith(Number) })
+    .from(projects).where(eq(projects.orgId, orgId)).groupBy(projects.status);
+  const counts = Object.fromEntries(statusRows.map((r) => [r.status, r.count]));
+
+  const [invoicedRow] = await db
+    .select({ total: sql<number>`coalesce(sum(${documents.totalCents}), 0)`, paid: sql<number>`coalesce(sum(${documents.paidCents}), 0)` })
+    .from(documents)
+    .innerJoin(projects, eq(projects.id, documents.projectId))
+    .where(and(eq(documents.orgId, orgId), eq(documents.type, "invoice"), ne(documents.status, "void"), ne(projects.status, "cancelled")));
+
+  const invoicedCents = Number(invoicedRow?.total ?? 0);
+  const collectedCents = Number(invoicedRow?.paid ?? 0);
+  const outstandingCents = Math.max(0, invoicedCents - collectedCents);
+
+  const lead = counts.lead ?? 0;
+  const quoted = counts.quoted ?? 0;
+  const confirmed = counts.confirmed ?? 0;
+  const inProgress = counts.in_progress ?? 0;
+  const completed = counts.completed ?? 0;
+  const cancelled = counts.cancelled ?? 0;
+  const confirmedPlus = confirmed + inProgress + completed;
+
+  const nodeNames = ["Leads", "Quoted", "Confirmed+", "Cancelled", "Invoiced", "Collected", "Outstanding"];
+  const idx = Object.fromEntries(nodeNames.map((n, i) => [n, i]));
+  const links: { source: number; target: number; value: number }[] = [];
+  if (lead > 0) links.push({ source: idx.Leads, target: idx.Quoted, value: lead });
+  if (quoted > 0) links.push({ source: idx.Quoted, target: idx["Confirmed+"], value: quoted });
+  if (cancelled > 0) links.push({ source: idx.Leads, target: idx.Cancelled, value: cancelled });
+  if (confirmedPlus > 0 && invoicedCents > 0) links.push({ source: idx["Confirmed+"], target: idx.Invoiced, value: Math.round(invoicedCents / 100) });
+  if (collectedCents > 0) links.push({ source: idx.Invoiced, target: idx.Collected, value: Math.round(collectedCents / 100) });
+  if (outstandingCents > 0) links.push({ source: idx.Invoiced, target: idx.Outstanding, value: Math.round(outstandingCents / 100) });
+
+  return { nodes: nodeNames.map((name) => ({ name })), links };
+}
+
+/** #7 Radar — event-type performance profile across 4 honestly-available axes. */
+export async function eventTypePerformanceProfile() {
+  const orgId = currentOrgId();
+  const projectsWithFinancials = await projectFinancialsByType();
+  const projectIds = projectsWithFinancials.map((p) => p.projectId);
+  if (projectIds.length === 0) {
+    return { data: [{ axis: "Margin %", value: 0 }, { axis: "Damage-free %", value: 0 }, { axis: "Reconciled %", value: 0 }, { axis: "Repeat clients %", value: 0 }], series: [] as { key: string; label: string; color: string }[] };
+  }
+
+  const [damageRows, manifestRows, contactCounts] = await Promise.all([
+    db.select({ projectId: damageReports.projectId }).from(damageReports).where(and(eq(damageReports.orgId, orgId), inArray(damageReports.projectId, projectIds))),
+    db.select({ projectId: manifests.projectId, status: manifests.status }).from(manifests).where(and(eq(manifests.orgId, orgId), inArray(manifests.projectId, projectIds))),
+    db.select({ contactId: projects.contactId, count: sql<number>`count(*)`.mapWith(Number) }).from(projects)
+      .where(and(eq(projects.orgId, orgId), isNotNull(projects.contactId))).groupBy(projects.contactId),
+  ]);
+
+  const damagedProjectIds = new Set(damageRows.map((d) => d.projectId).filter((id): id is number => id != null));
+  const reconciledCount = manifestRows.filter((m) => m.status === "reconciled").length;
+  const repeatClientIds = new Set(contactCounts.filter((c) => c.count > 1).map((c) => c.contactId));
+
+  const totalInvoiced = projectsWithFinancials.reduce((s, p) => s + p.invoicedCents, 0);
+  const totalCost = projectsWithFinancials.reduce((s, p) => s + p.costCents, 0);
+  const marginPct = totalInvoiced > 0 ? Math.max(0, Math.min(100, Math.round(((totalInvoiced - totalCost) / totalInvoiced) * 100))) : 0;
+  const damageFreePct = Math.round(((projectIds.length - damagedProjectIds.size) / projectIds.length) * 100);
+  const reconciledPct = manifestRows.length > 0 ? Math.round((reconciledCount / manifestRows.length) * 100) : 0;
+  const repeatClientProjects = projectsWithFinancials.filter((p) => p.contactId && repeatClientIds.has(p.contactId)).length;
+  const repeatClientPct = Math.round((repeatClientProjects / projectIds.length) * 100);
+
+  return {
+    data: [
+      { axis: "Margin %", value: marginPct },
+      { axis: "Damage-free %", value: damageFreePct },
+      { axis: "Reconciled %", value: reconciledPct },
+      { axis: "Repeat clients %", value: repeatClientPct },
+    ],
+    series: [{ key: "value", label: "All projects", color: "var(--color-brand, #0f766e)" }],
+  };
+}
+
+const FUNNEL_COLORS: Record<string, string> = {
+  Lead: "#d2d2d7", Quoted: "#93c5fd", Confirmed: "#5eead4", Completed: "var(--color-brand, #0f766e)",
+};
+
+/** #8 Funnel — Lead → Quoted → Confirmed → Completed, real counts. */
+export async function salesFunnelStages() {
+  const orgId = currentOrgId();
+  const rows = await db
+    .select({ status: projects.status, count: sql<number>`count(*)`.mapWith(Number) })
+    .from(projects).where(and(eq(projects.orgId, orgId), ne(projects.status, "cancelled"))).groupBy(projects.status);
+  const counts = Object.fromEntries(rows.map((r) => [r.status, r.count]));
+
+  const lead = (counts.lead ?? 0) + (counts.quoted ?? 0) + (counts.confirmed ?? 0) + (counts.in_progress ?? 0) + (counts.completed ?? 0);
+  const quoted = (counts.quoted ?? 0) + (counts.confirmed ?? 0) + (counts.in_progress ?? 0) + (counts.completed ?? 0);
+  const confirmed = (counts.confirmed ?? 0) + (counts.in_progress ?? 0) + (counts.completed ?? 0);
+  const completed = counts.completed ?? 0;
+
+  return [
+    { name: "Lead", value: lead, fill: FUNNEL_COLORS.Lead },
+    { name: "Quoted", value: quoted, fill: FUNNEL_COLORS.Quoted },
+    { name: "Confirmed", value: confirmed, fill: FUNNEL_COLORS.Confirmed },
+    { name: "Completed", value: completed, fill: FUNNEL_COLORS.Completed },
+  ];
 }
