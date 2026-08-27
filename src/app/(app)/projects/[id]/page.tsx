@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
 import { getOrg } from "@/lib/org";
-import { getProject, projectFinancials, projectDocuments, getProjectMilestones } from "@/lib/projects";
+import { getProject, projectFinancials, projectDocuments, getProjectMilestones, getProjectOverviewStats } from "@/lib/projects";
 import { listInventoryInstances, listReservationsForProject } from "@/lib/inventory-instances";
 import { listPaymentSchedule } from "@/lib/payment-schedule";
 import { listDamageReportsForProject } from "@/lib/damage-reports";
@@ -10,8 +10,16 @@ import { listContractsForProject } from "@/lib/contracts";
 import { listProjectFiles } from "@/lib/project-files";
 import { listProjectTasks, listActiveStaff } from "@/lib/project-tasks";
 import { listProjectAuditLog } from "@/lib/audit";
-import { PageHeader, PrimaryLink, StatCard, Money, StatusPill, EmptyState, Th, Td, TableCard } from "@/components/ui";
+import { getDamagePhotoUrlAction } from "@/lib/damage-reports";
+import { todayISO } from "@/lib/money";
+import { PageHeader, PrimaryLink, Money, StatusPill, EmptyState, Th, Td, TableCard } from "@/components/ui";
 import { ProjectStatusControl } from "./ProjectStatusControl";
+import { LifecycleStepper } from "./overview/LifecycleStepper";
+import { FinancialBars } from "./overview/FinancialBars";
+import { PaymentTimeline } from "./overview/PaymentTimeline";
+import { ManifestReadiness } from "./overview/ManifestReadiness";
+import { CostBreakdown } from "./overview/CostBreakdown";
+import { DamageFlag } from "./overview/DamageFlag";
 import { ReserveInventoryPanel } from "./ReserveInventoryPanel";
 import { PaymentSchedulePanel } from "./PaymentSchedulePanel";
 import { DamageReportPanel } from "./DamageReportPanel";
@@ -113,7 +121,7 @@ export default async function ProjectDetailPage({
   const { tab: tabParam } = await searchParams;
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "overview";
 
-  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts, files, tasks, staff, timelineEvents, auditRows] = await Promise.all([
+  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts, files, tasks, staff, timelineEvents, auditRows, overviewStats] = await Promise.all([
     projectFinancials(projectId),
     projectDocuments(projectId),
     listInventoryInstances(),
@@ -126,7 +134,15 @@ export default async function ProjectDetailPage({
     listActiveStaff(),
     getProjectMilestones(projectId),
     listProjectAuditLog(projectId),
+    getProjectOverviewStats(projectId),
   ]);
+
+  const mostRecentDamage = damageReports[0] ?? null;
+  const damagePhotoSignedUrl = mostRecentDamage?.photoUrl
+    ? await getDamagePhotoUrlAction(mostRecentDamage.photoUrl).then((r) => (typeof r === "string" ? r : null))
+    : null;
+
+  const daysToEvent = Math.ceil((new Date(project.eventDate).getTime() - new Date(todayISO()).getTime()) / 86400000);
 
   const quoteDocs = docs.filter((d) => d.type === "quote");
   const invoiceDocs = docs.filter((d) => d.type === "invoice");
@@ -189,12 +205,49 @@ export default async function ProjectDetailPage({
       <div>
         {tab === "overview" && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-              <StatCard compact label="Budget" cents={financials.budgetCents} />
-              <StatCard compact label="Invoiced" cents={financials.invoicedCents} />
-              <StatCard compact label="Collected" cents={financials.collectedCents} tone="good" />
-              <StatCard compact label="Cost so far" cents={financials.costCents} tone={financials.costCents > financials.budgetCents && financials.budgetCents > 0 ? "bad" : "neutral"} />
-              <StatCard compact label="Margin" cents={financials.marginCents} tone={financials.marginCents >= 0 ? "good" : "bad"} />
+            {!overviewStats.cancelled && Number.isFinite(daysToEvent) && (
+              <div className="flex justify-end mb-2">
+                <span className="inline-block rounded-full bg-[var(--color-accent-50)] text-[var(--color-accent-700)] text-[11.5px] font-medium px-3 py-1">
+                  {daysToEvent > 0 ? `${daysToEvent} days to event` : daysToEvent === 0 ? "Event is today" : `${Math.abs(daysToEvent)} days since event`}
+                </span>
+              </div>
+            )}
+
+            <LifecycleStepper stage={overviewStats.stage} cancelled={overviewStats.cancelled} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+              <FinancialBars
+                budgetCents={financials.budgetCents}
+                invoicedCents={financials.invoicedCents}
+                collectedCents={financials.collectedCents}
+                marginCents={financials.marginCents}
+              />
+              <PaymentTimeline projectId={projectId} milestones={milestones} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              <ManifestReadiness
+                projectId={projectId}
+                manifestExists={overviewStats.manifestExists}
+                pickedCount={overviewStats.pickedCount}
+                totalDurable={overviewStats.totalDurable}
+                lines={overviewStats.manifestLines}
+              />
+              <CostBreakdown operationalCents={financials.costCents} damageWriteoffCents={overviewStats.damageWriteoffCents} />
+              {mostRecentDamage ? (
+                <DamageFlag
+                  projectId={projectId}
+                  count={damageReports.length}
+                  itemName={mostRecentDamage.itemName}
+                  damageType={mostRecentDamage.damageType}
+                  liabilityStatus={mostRecentDamage.liabilityStatus}
+                  photoSignedUrl={damagePhotoSignedUrl}
+                />
+              ) : (
+                <div className="card p-5 flex items-center justify-center text-center">
+                  <div className="text-[12.5px] text-[var(--color-ink-300)]">No damage reports</div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

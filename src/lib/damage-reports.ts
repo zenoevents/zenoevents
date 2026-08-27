@@ -170,6 +170,7 @@ export async function listDamageReportsForProject(projectId: number) {
         description: damageReports.description,
         stageReported: damageReports.stageReported,
         liabilityStatus: damageReports.liabilityStatus,
+        photoUrl: damageReports.photoUrl,
         createdAt: damageReports.createdAt,
       })
       .from(damageReports)

@@ -11,6 +11,9 @@ import { redirect } from "next/navigation";
 import type { ProjectStatus } from "@/lib/project-status";
 import { getManifestForProject } from "@/lib/manifests";
 import { listDamageReportsForProject } from "@/lib/damage-reports";
+import { LINE_STATUSES } from "@/lib/manifest-status";
+import { damageReports } from "@/db";
+import { type LifecycleStage } from "@/lib/lifecycle-stage";
 
 export async function listProjects() {
   return withOrg(async () => {
@@ -303,5 +306,58 @@ export async function getProjectMilestones(projectId: number): Promise<Milestone
     }
 
     return events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  });
+}
+
+function lineFloorStage(status: string): LifecycleStage {
+  if (status.startsWith("inspected_")) return "inspected";
+  if (status === "returned" || status === "collected") return "returned";
+  if (status === "dispatched") return "dispatched";
+  if (status === "loaded") return "loaded";
+  return "packing"; // pending | picked
+}
+
+/** Read-only aggregates for the Overview dashboard — a synthetic lifecycle
+ *  stage (combining project.status + the manifest's slowest durable line,
+ *  since a manifest is only as far along as its laggard line), manifest
+ *  pick-readiness, and a cost split into operational vs. damage write-off.
+ *  No writes, no new tables — everything here already exists elsewhere. */
+export async function getProjectOverviewStats(projectId: number) {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const [proj] = await db.select({ status: projects.status }).from(projects)
+      .where(and(eq(projects.orgId, orgId), eq(projects.id, projectId))).limit(1);
+
+    const manifest = await getManifestForProject(projectId);
+    const durableLines = manifest ? manifest.lines.filter((l) => l.lineType === "durable") : [];
+
+    let stage: LifecycleStage;
+    if (!manifest) {
+      stage = proj && (proj.status === "lead" || proj.status === "quoted") ? "draft" : "confirmed";
+    } else if (manifest.status === "reconciled") {
+      stage = "reconciled";
+    } else if (durableLines.length === 0) {
+      stage = "packing";
+    } else {
+      const floorIndex = Math.min(...durableLines.map((l) => LINE_STATUSES.indexOf(l.status as (typeof LINE_STATUSES)[number])));
+      stage = lineFloorStage(LINE_STATUSES[floorIndex] ?? "pending");
+    }
+
+    const pickedCount = durableLines.filter((l) => LINE_STATUSES.indexOf(l.status as (typeof LINE_STATUSES)[number]) >= LINE_STATUSES.indexOf("picked")).length;
+
+    const [damageWriteoff] = await db
+      .select({ total: sql<number>`coalesce(sum(${damageReports.billedAmountCents}), 0)` })
+      .from(damageReports)
+      .where(and(eq(damageReports.orgId, orgId), eq(damageReports.projectId, projectId), eq(damageReports.billedToClient, false)));
+
+    return {
+      stage,
+      cancelled: proj?.status === "cancelled",
+      manifestExists: !!manifest,
+      pickedCount,
+      totalDurable: durableLines.length,
+      manifestLines: durableLines,
+      damageWriteoffCents: Number(damageWriteoff?.total ?? 0),
+    };
   });
 }
