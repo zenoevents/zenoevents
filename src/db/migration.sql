@@ -1122,3 +1122,6 @@ CREATE INDEX IF NOT EXISTS idx_project_tasks_org_project ON project_tasks(org_id
 
 ALTER TABLE org_audit_log ADD COLUMN IF NOT EXISTS project_id INTEGER;
 CREATE INDEX IF NOT EXISTS idx_org_audit_org_project ON org_audit_log(org_id, project_id);
+
+-- Projects as hub Phase C: contract template setting.
+ALTER TABLE org ADD COLUMN IF NOT EXISTS contract_template TEXT;

@@ -1562,6 +1562,7 @@ export async function saveOrgProfile(data: {
   documentFooterText?: string;
   paymentInfoText?: string;
   termsText?: string;
+  contractTemplate?: string;
   dataSegregation?: boolean;
   requireBillApproval?: boolean;
   accountantApprovalLimitCents?: number | null;
@@ -1608,6 +1609,7 @@ export async function saveOrgProfile(data: {
         ...(data.documentFooterText !== undefined ? { documentFooterText: data.documentFooterText } : {}),
         ...(data.paymentInfoText !== undefined ? { paymentInfoText: data.paymentInfoText } : {}),
         ...(data.termsText !== undefined ? { termsText: data.termsText } : {}),
+        ...(data.contractTemplate !== undefined ? { contractTemplate: data.contractTemplate } : {}),
         ...(data.dataSegregation !== undefined ? { dataSegregation: data.dataSegregation } : {}),
         ...(data.requireBillApproval !== undefined ? { requireBillApproval: data.requireBillApproval } : {}),
         ...(data.accountantApprovalLimitCents !== undefined ? { accountantApprovalLimitCents: data.accountantApprovalLimitCents } : {}),
@@ -1648,6 +1650,7 @@ export async function saveOrgProfile(data: {
         ...(data.documentFooterText !== undefined ? { documentFooterText: data.documentFooterText } : {}),
         ...(data.paymentInfoText !== undefined ? { paymentInfoText: data.paymentInfoText } : {}),
         ...(data.termsText !== undefined ? { termsText: data.termsText } : {}),
+        ...(data.contractTemplate !== undefined ? { contractTemplate: data.contractTemplate } : {}),
         ...(data.dataSegregation !== undefined ? { dataSegregation: data.dataSegregation } : {}),
         ...(data.requireBillApproval !== undefined ? { requireBillApproval: data.requireBillApproval } : {}),
         ...(data.accountantApprovalLimitCents !== undefined ? { accountantApprovalLimitCents: data.accountantApprovalLimitCents } : {}),

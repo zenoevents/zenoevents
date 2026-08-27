@@ -51,6 +51,7 @@ export default async function SettingsPage() {
           documentFooterText: o.documentFooterText,
           paymentInfoText: o.paymentInfoText,
           termsText: o.termsText,
+          contractTemplate: o.contractTemplate,
           dataSegregation: o.dataSegregation,
           requireBillApproval: o.requireBillApproval,
           accountantApprovalLimitCents: o.accountantApprovalLimitCents,

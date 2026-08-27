@@ -25,6 +25,7 @@ interface OrgData {
   documentFooterText?: string | null;
   paymentInfoText?: string | null;
   termsText?: string | null;
+  contractTemplate?: string | null;
   dataSegregation: boolean;
   requireBillApproval: boolean;
   accountantApprovalLimitCents?: number | null;
@@ -77,6 +78,7 @@ export function OrgProfileForm({ initial, gatewayOptions = [] }: { initial: OrgD
   const [documentFooterText, setDocumentFooterText] = useState(initial.documentFooterText || "");
   const [paymentInfoText, setPaymentInfoText] = useState(initial.paymentInfoText || "");
   const [termsText, setTermsText] = useState(initial.termsText || "");
+  const [contractTemplate, setContractTemplate] = useState(initial.contractTemplate || "");
   const [dataSegregation, setDataSegregation] = useState(initial.dataSegregation);
   const [requireBillApproval, setRequireBillApproval] = useState(initial.requireBillApproval);
   const [accountantApprovalLimit, setAccountantApprovalLimit] = useState(
@@ -177,6 +179,7 @@ export function OrgProfileForm({ initial, gatewayOptions = [] }: { initial: OrgD
           documentFooterText: documentFooterText,
           paymentInfoText: paymentInfoText,
           termsText: termsText,
+          contractTemplate: contractTemplate,
           dataSegregation,
           requireBillApproval,
           accountantApprovalLimitCents: accountantApprovalLimit.trim() ? Math.round((Number(accountantApprovalLimit) || 0) * 100) : null,
@@ -734,6 +737,18 @@ export function OrgProfileForm({ initial, gatewayOptions = [] }: { initial: OrgD
               onChange={(e) => setTermsText(e.target.value)}
               className={inputCls + " h-24 resize-none"}
               placeholder="Payment due within 14 days..."
+            />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Contract Template</span>
+            <div className="text-[12px] text-[var(--color-ink-400)] mb-1">
+              Auto-fills a new project contract. Available fields: {"{{client_name}}"}, {"{{event_name}}"}, {"{{event_date}}"}, {"{{venue}}"}, {"{{color_theme}}"}, {"{{budget}}"}, {"{{org_name}}"}.
+            </div>
+            <textarea
+              value={contractTemplate}
+              onChange={(e) => setContractTemplate(e.target.value)}
+              className={inputCls + " h-32 resize-none"}
+              placeholder={"This agreement is between {{org_name}} and {{client_name}} for {{event_name}} on {{event_date}} at {{venue}}..."}
             />
           </label>
         </div>

@@ -116,6 +116,9 @@ function ContractCard({ contract, onChanged }: { contract: ContractRow; onChange
         <a href={`/api/pdf/contract/${contract.id}`} target="_blank" rel="noreferrer" className="text-[12px] font-medium text-[var(--color-accent-600)] hover:underline">
           View PDF
         </a>
+        <a href={`/api/pdf/contract/${contract.id}?download=1`} className="text-[12px] font-medium text-[var(--color-accent-600)] hover:underline">
+          Download PDF
+        </a>
         {contract.status === "draft" && (
           <>
             <button disabled={pending} onClick={() => setStatus("sent")} className="text-[12px] font-medium text-[var(--color-accent-600)] hover:underline disabled:opacity-50">Mark Sent</button>
@@ -136,7 +139,43 @@ function ContractCard({ contract, onChanged }: { contract: ContractRow; onChange
   );
 }
 
-export function ContractsPanel({ projectId, contracts }: { projectId: number; contracts: ContractRow[] }) {
+type ProjectInfo = {
+  name: string;
+  clientName: string | null;
+  eventDate: string;
+  venue: string | null;
+  colorTheme: string | null;
+  budgetCents: number;
+};
+
+/** Plain {{field}} substitution — the only merge-field engine this app has.
+ *  Missing values fall back to an empty string, never "undefined". */
+function interpolateTemplate(template: string, project: ProjectInfo, orgName: string): string {
+  const values: Record<string, string> = {
+    client_name: project.clientName || "",
+    event_name: project.name || "",
+    event_date: project.eventDate || "",
+    venue: project.venue || "",
+    color_theme: project.colorTheme || "",
+    budget: project.budgetCents ? fmtKES(project.budgetCents) : "",
+    org_name: orgName || "",
+  };
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => values[key] ?? match);
+}
+
+export function ContractsPanel({
+  projectId,
+  contracts,
+  contractTemplate,
+  project,
+  orgName,
+}: {
+  projectId: number;
+  contracts: ContractRow[];
+  contractTemplate?: string | null;
+  project: ProjectInfo;
+  orgName: string;
+}) {
   const [showNew, setShowNew] = useState(false);
   const [subject, setSubject] = useState("");
   const [value, setValue] = useState("");
@@ -148,6 +187,13 @@ export function ContractsPanel({ projectId, contracts }: { projectId: number; co
 
   function refresh() {
     window.location.reload();
+  }
+
+  function openNew() {
+    setSubject(`${project.name} — Service Agreement`);
+    if (contractTemplate) setContent(interpolateTemplate(contractTemplate, project, orgName));
+    if (project.budgetCents) setValue((project.budgetCents / 100).toFixed(2));
+    setShowNew(true);
   }
 
   async function submit() {
@@ -175,7 +221,7 @@ export function ContractsPanel({ projectId, contracts }: { projectId: number; co
         <EmptyState
           title="No contracts yet"
           body="Client service agreements for this event — print, get it signed, then upload a photo of the signed copy to close the loop."
-          action={<button onClick={() => setShowNew(true)} className="text-[13px] font-medium text-white bg-[var(--color-accent-500)] rounded-lg px-4 py-2">+ New Contract</button>}
+          action={<button onClick={openNew} className="text-[13px] font-medium text-white bg-[var(--color-accent-500)] rounded-lg px-4 py-2">+ New Contract</button>}
         />
       ) : (
         <div className="space-y-2">
@@ -184,7 +230,7 @@ export function ContractsPanel({ projectId, contracts }: { projectId: number; co
       )}
 
       {contracts.length > 0 && !showNew && (
-        <button onClick={() => setShowNew(true)} className="text-[13px] font-medium text-[var(--color-accent-600)] hover:underline">+ New Contract</button>
+        <button onClick={openNew} className="text-[13px] font-medium text-[var(--color-accent-600)] hover:underline">+ New Contract</button>
       )}
 
       {showNew && (

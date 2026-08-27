@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
+import { getOrg } from "@/lib/org";
 import { getProject, projectFinancials, projectDocuments, getProjectMilestones } from "@/lib/projects";
 import { listInventoryInstances, listReservationsForProject } from "@/lib/inventory-instances";
 import { listPaymentSchedule } from "@/lib/payment-schedule";
@@ -90,7 +91,7 @@ export default async function ProjectDetailPage({
   await requirePerm("projects");
   const { id } = await params;
   const projectId = Number(id);
-  const project = await getProject(projectId);
+  const [project, org] = await Promise.all([getProject(projectId), getOrg()]);
   if (!project) notFound();
 
   const { tab: tabParam } = await searchParams;
@@ -331,7 +332,20 @@ export default async function ProjectDetailPage({
         )}
 
         {tab === "contracts" && (
-          <ContractsPanel projectId={project.id} contracts={contracts} />
+          <ContractsPanel
+            projectId={project.id}
+            contracts={contracts}
+            contractTemplate={org.contractTemplate}
+            project={{
+              name: project.name,
+              clientName: project.clientName,
+              eventDate: project.eventDate,
+              venue: project.venue,
+              colorTheme: project.colorTheme,
+              budgetCents: project.budgetCents,
+            }}
+            orgName={org.name}
+          />
         )}
 
         {tab === "files" && (

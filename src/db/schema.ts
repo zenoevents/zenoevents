@@ -48,6 +48,9 @@ export const org = pgTable("org", {
   documentFooterText: text("document_footer_text"),
   paymentInfoText: text("payment_info_text"),
   termsText: text("terms_text"),
+  /** Contract wording template with {{merge_field}} placeholders, filled
+   *  from project/client data client-side when a new contract is opened. */
+  contractTemplate: text("contract_template"),
   dataSegregation: boolean("data_segregation").notNull().default(false),
   /** Staff home dashboard "Collected this year" stat card — admin-controlled, org-wide. */
   showCollectedThisYearCard: boolean("show_collected_this_year_card").notNull().default(true),
