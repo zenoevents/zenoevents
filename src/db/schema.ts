@@ -29,6 +29,10 @@ export const org = pgTable("org", {
    *  portalSlug so the receipts-portal and lead-capture features stay
    *  decoupled. Generated on first enabling any public lead channel. */
   leadFormSlug: text("lead_form_slug").unique(),
+  /** Past-events social proof on the public lead form — admin-pasted
+   *  Instagram post URLs, rendered via Instagram's own oEmbed widget (no
+   *  Meta login/API keys). Not auto-syncing; admin refreshes it manually. */
+  instagramPostUrls: jsonb("instagram_post_urls"),
   kraPin: text("kra_pin"),
   vatRegistered: boolean("vat_registered").notNull().default(true),
   address: text("address"),

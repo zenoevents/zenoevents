@@ -1207,3 +1207,6 @@ CREATE TABLE IF NOT EXISTS referral_rewards (
   paid_on TEXT,
   created_at TEXT NOT NULL
 );
+
+-- Leads Batch 5: past-events Instagram post embed on the public lead form.
+ALTER TABLE org ADD COLUMN IF NOT EXISTS instagram_post_urls JSONB;

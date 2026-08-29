@@ -322,12 +322,30 @@ export async function generateLeadQrAction(campaign: string): Promise<{ url: str
   return { url, dataUrl };
 }
 
+/** Admin-managed list of Instagram post URLs shown as social proof on the
+ *  public lead form — manual embed tier (Instagram's own oEmbed widget),
+ *  not auto-synced. See getOrgByLeadFormSlug for the public-page read. */
+export async function setInstagramPostUrlsAction(urls: string[]): Promise<{ success: true } | { error: string }> {
+  await requirePerm("leads");
+  try {
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const cleaned = urls.map((u) => u.trim()).filter((u) => /^https?:\/\/(www\.)?instagram\.com\//.test(u)).slice(0, 12);
+      await db.update(org).set({ instagramPostUrls: cleaned }).where(eq(org.id, orgId));
+      revalidatePath("/settings/leads");
+      return { success: true };
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not save" };
+  }
+}
+
 /** Public-page lookup — no auth, no withOrg (there's no session). Resolves
  *  purely from the slug in the URL, never a trusted org id. Returns null if
  *  the slug doesn't match or the org hasn't enabled any public channel yet
  *  (an org with everything toggled off shouldn't have a live form). */
 export async function getOrgByLeadFormSlug(slug: string) {
-  const [o] = await db.select({ id: org.id, name: org.name, logoUrl: org.logoUrl, brandColor: org.brandColor })
+  const [o] = await db.select({ id: org.id, name: org.name, logoUrl: org.logoUrl, brandColor: org.brandColor, instagramPostUrls: org.instagramPostUrls })
     .from(org).where(eq(org.leadFormSlug, slug)).limit(1);
   if (!o) return null;
   const [anyEnabled] = await db.select({ id: leadChannels.id }).from(leadChannels)

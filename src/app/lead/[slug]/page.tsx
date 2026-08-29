@@ -1,5 +1,6 @@
 import { getOrgByLeadFormSlug } from "@/lib/leads";
 import { LeadForm } from "./LeadForm";
+import { PastEvents } from "./PastEvents";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function PublicLeadPage({
         campaign={campaign || null}
         ref_={ref || null}
       />
+      <PastEvents urls={(org.instagramPostUrls as string[] | null) ?? []} />
       <div className="text-center text-[11px] text-gray-400 mt-4">
         Powered by Zeno · <a href="/privacy" className="hover:text-gray-600">Privacy</a> · <a href="/terms" className="hover:text-gray-600">Terms</a>
       </div>
