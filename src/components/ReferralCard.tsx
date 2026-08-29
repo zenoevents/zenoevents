@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { generateReferralCodeAction, markReferralRewardPaidAction } from "@/lib/leads";
-import { fmtKES } from "@/lib/money";
+import { fmtKES, parseKES } from "@/lib/money";
 
 interface ReferralReward {
   id: number;
@@ -37,7 +37,8 @@ export function ReferralCard({ contactId, baseFormUrl, codes }: { contactId: num
   function generate() {
     setError(null);
     start(async () => {
-      const res = await generateReferralCodeAction(contactId, rewardType, Number(rewardValue) || 0);
+      const value = rewardType === "cash" ? (parseKES(rewardValue) || 0) : Number(rewardValue) || 0;
+      const res = await generateReferralCodeAction(contactId, rewardType, value);
       if ("error" in res) setError(res.error);
       else router.refresh();
     });
