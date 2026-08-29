@@ -35,8 +35,11 @@ export async function getOrCreateReceiptToken(orgId: number, paymentId: number):
 
 /** Absolute app origin: env var, else the current request's host. */
 export async function appOrigin(): Promise<string> {
-  const env = process.env.NEXT_PUBLIC_APP_URL;
-  if (env) return env.replace(/\/$/, "");
+  const env = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (env) {
+    const withProtocol = /^https?:\/\//.test(env) ? env : `https://${env}`;
+    return withProtocol.replace(/\/$/, "");
+  }
   try {
     const { headers } = await import("next/headers");
     const h = await headers();

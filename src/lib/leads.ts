@@ -303,7 +303,8 @@ export async function buildLeadFormUrl(channel: string, campaign?: string, ref?:
   return withOrg(async () => {
     const o = await getOrg();
     if (!o.leadFormSlug) return null;
-    const url = new URL(`/lead/${o.leadFormSlug}`, await appOrigin());
+    const origin = (await appOrigin()) || "https://zenoevents.vercel.app";
+    const url = new URL(`/lead/${o.leadFormSlug}`, origin);
     url.searchParams.set("channel", channel);
     if (campaign) url.searchParams.set("campaign", campaign);
     if (ref) url.searchParams.set("ref", ref);
