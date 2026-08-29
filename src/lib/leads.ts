@@ -1,7 +1,7 @@
 "use server";
 
 import { db, leads, leadChannels, members, notifications, contacts, contactGroupMemberships, org, referralCodes, referralRewards, customerGroups, projects } from "@/db";
-import { and, eq, inArray, desc, ne } from "drizzle-orm";
+import { and, eq, inArray, desc, ne, sql } from "drizzle-orm";
 import { withOrg, currentOrgId, getOrg } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
 import { nowISO, todayISO } from "@/lib/money";
@@ -619,6 +619,92 @@ export async function referralSummary() {
       earnedUnpaidCount: owed.length,
       earnedUnpaidCents: owed.reduce((s, r) => s + r.rewardValue, 0),
     };
+  });
+}
+
+const LEAD_FUNNEL_COLORS: Record<string, string> = {
+  New: "#d2d2d7", Contacted: "#93c5fd", "Quote sent": "#fde68a", Won: "var(--color-brand, #0f766e)",
+};
+
+/** Cumulative pipeline funnel — every lead is "New," a shrinking subset
+ *  made it further. Mirrors salesFunnelStages()'s cumulative-count shape
+ *  in src/lib/analytics.ts. Lost leads count toward every stage they
+ *  actually reached (a lost-after-quote lead still counted as quoted). */
+export async function leadFunnelStages() {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const rows = await db.select({ stage: leads.stage, count: sql<number>`count(*)`.mapWith(Number) })
+      .from(leads).where(eq(leads.orgId, orgId)).groupBy(leads.stage);
+    const counts = Object.fromEntries(rows.map((r) => [r.stage, r.count]));
+    const total = Object.values(counts).reduce((s, c) => s + c, 0);
+    const quoteSent = (counts.quote_sent ?? 0) + (counts.won ?? 0);
+    const won = counts.won ?? 0;
+    // "Contacted" = reached any stage past new, whether still open, quoted, won, or lost.
+    const contacted = total - (counts.new ?? 0);
+
+    return [
+      { name: "New", value: total, fill: LEAD_FUNNEL_COLORS.New },
+      { name: "Contacted", value: contacted, fill: LEAD_FUNNEL_COLORS.Contacted },
+      { name: "Quote sent", value: quoteSent, fill: LEAD_FUNNEL_COLORS["Quote sent"] },
+      { name: "Won", value: won, fill: LEAD_FUNNEL_COLORS.Won },
+    ];
+  });
+}
+
+/** Leads by channel — plain counts for a horizontal rank chart. */
+export async function leadsByChannelChart() {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const rows = await db.select({ channel: leads.channel, count: sql<number>`count(*)`.mapWith(Number) })
+      .from(leads).where(eq(leads.orgId, orgId)).groupBy(leads.channel);
+    const byLabel = new Map<string, number>();
+    for (const r of rows) {
+      const label = CHANNEL_LABELS[r.channel] ?? r.channel;
+      byLabel.set(label, (byLabel.get(label) ?? 0) + r.count);
+    }
+    return Array.from(byLabel.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  });
+}
+
+/** Why leads are marked Lost — real data captured on every lost lead
+ *  (lostReason, required at the point of marking) but never surfaced
+ *  anywhere until now. */
+export async function lostReasonBreakdown() {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const rows = await db.select({ lostReason: leads.lostReason }).from(leads)
+      .where(and(eq(leads.orgId, orgId), eq(leads.stage, "lost")));
+    const byReason = new Map<string, number>();
+    for (const r of rows) {
+      const label = r.lostReason?.trim() || "No reason given";
+      byReason.set(label, (byReason.get(label) ?? 0) + 1);
+    }
+    return Array.from(byReason.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  });
+}
+
+/** Leads created per week, trailing N weeks — the capture-volume trend. */
+export async function leadsOverTimeTrend(weeks = 12) {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const since = new Date(Date.now() - weeks * 7 * 24 * 60 * 60 * 1000).toISOString();
+    const rows = await db.select({ createdAt: leads.createdAt }).from(leads)
+      .where(and(eq(leads.orgId, orgId), sql`${leads.createdAt} >= ${since}`));
+
+    const buckets: { label: string; count: number }[] = [];
+    const now = Date.now();
+    for (let i = weeks - 1; i >= 0; i--) {
+      const weekStart = new Date(now - i * 7 * 24 * 60 * 60 * 1000);
+      const label = weekStart.toLocaleDateString("en-KE", { month: "short", day: "numeric" });
+      buckets.push({ label, count: 0 });
+    }
+    for (const r of rows) {
+      const ageMs = now - new Date(r.createdAt).getTime();
+      const weeksAgo = Math.floor(ageMs / (7 * 24 * 60 * 60 * 1000));
+      const idx = weeks - 1 - weeksAgo;
+      if (idx >= 0 && idx < buckets.length) buckets[idx].count++;
+    }
+    return buckets;
   });
 }
 

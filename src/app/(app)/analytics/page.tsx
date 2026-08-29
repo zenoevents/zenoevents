@@ -2,9 +2,10 @@ import { requirePerm } from "@/lib/guard";
 import { getOrg, withOrg } from "@/lib/org";
 import { PageHeader } from "@/components/ui";
 import { fmtKES } from "@/lib/money";
-import { db, items, employees, projects } from "@/db";
+import { db, items, employees, projects, leads } from "@/db";
 import { eq, and } from "drizzle-orm";
 import * as A from "@/lib/analytics";
+import { leadFunnelStages, leadsByChannelChart, lostReasonBreakdown, leadsOverTimeTrend } from "@/lib/leads";
 import { aging } from "@/lib/reports";
 import {
   TrendAreaChart, TrendLineChart, RankBarChart, CategoryBarChart, StackedBarChart, BreakdownDonut,
@@ -51,13 +52,18 @@ export default async function AnalyticsPage() {
   const o = await getOrg();
   const has = (_need?: string) => true;
 
-  const [hasInventory, hasEmployees, hasEvents] = await withOrg(() =>
+  const [hasInventory, hasEmployees, hasEvents, hasLeads] = await withOrg(() =>
     Promise.all([
       db.select({ id: items.id }).from(items).where(and(eq(items.orgId, o.id), eq(items.trackInventory, true))).limit(1).then((r) => r.length > 0),
       db.select({ id: employees.id }).from(employees).where(eq(employees.orgId, o.id)).limit(1).then((r) => r.length > 0),
       db.select({ id: projects.id }).from(projects).where(eq(projects.orgId, o.id)).limit(1).then((r) => r.length > 0),
+      db.select({ id: leads.id }).from(leads).where(eq(leads.orgId, o.id)).limit(1).then((r) => r.length > 0),
     ])
   );
+
+  const [leadFunnel, leadsByChannel, lostReasons, leadsTrend] = hasLeads
+    ? await withOrg(() => Promise.all([leadFunnelStages(), leadsByChannelChart(), lostReasonBreakdown(), leadsOverTimeTrend(12)]))
+    : [[], [], [], []];
 
   const [
     marginByType, seasonalCurve, bookingsByType, leadTimeRange,
@@ -388,6 +394,27 @@ export default async function AnalyticsPage() {
               </Card>
               <Card title="Sales funnel" subtitle="Lead → Quoted → Confirmed → Completed">
                 <FunnelStages data={funnelStages} />
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* Leads */}
+        {hasLeads && (
+          <div className="space-y-4">
+            <Section title="Leads" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card title="Lead pipeline" subtitle="New → Contacted → Quote sent → Won, cumulative">
+                <FunnelStages data={leadFunnel} />
+              </Card>
+              <Card title="Leads by channel" subtitle="Where inquiries actually come from">
+                <RankBarChart data={leadsByChannel} money={false} color="#0284c7" />
+              </Card>
+              <Card title="Why leads are lost" subtitle="Reason given when marking a lead Lost">
+                <RankBarChart data={lostReasons} money={false} color="#dc2626" />
+              </Card>
+              <Card title="Leads captured" subtitle="Weekly, last 12 weeks">
+                <CategoryBarChart data={leadsTrend.map((t) => ({ label: t.label, value: t.count }))} money={false} color={brand} />
               </Card>
             </div>
           </div>
