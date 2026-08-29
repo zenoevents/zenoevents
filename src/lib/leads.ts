@@ -522,6 +522,87 @@ export async function sourcePerformance() {
   });
 }
 
+function referralCodeSlug(name: string): string {
+  const base = (name || "friend").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 8) || "FRIEND";
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${base}-${suffix}`;
+}
+
+/** Generates a shareable referral code for an existing customer — resolved
+ *  on the public lead form via ?ref=<code>, no typed-in name needed. */
+export async function generateReferralCodeAction(contactId: number, rewardType: string, rewardValue: number): Promise<{ code: string } | { error: string }> {
+  await requirePerm("leads");
+  try {
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const [contact] = await db.select({ id: contacts.id, displayName: contacts.displayName }).from(contacts)
+        .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId))).limit(1);
+      if (!contact) throw new Error("Customer not found");
+      if (!["none", "discount_pct", "cash"].includes(rewardType)) throw new Error("Invalid reward type");
+
+      let code = referralCodeSlug(contact.displayName);
+      for (let i = 0; i < 5; i++) {
+        const [clash] = await db.select({ id: referralCodes.id }).from(referralCodes).where(eq(referralCodes.code, code)).limit(1);
+        if (!clash) break;
+        code = referralCodeSlug(contact.displayName);
+      }
+
+      await db.insert(referralCodes).values({
+        orgId, contactId, code,
+        rewardType, rewardValue: Math.max(0, Math.round(rewardValue)),
+        active: true, createdAt: nowISO(),
+      });
+      await logAudit({ action: "referral_code.create", module: "leads", recordLabel: `${contact.displayName} — ${code}` });
+      revalidatePath(`/contacts/${contactId}`);
+      return { code };
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not generate a code" };
+  }
+}
+
+/** A contact's referral codes plus each one's leads/wins/reward status —
+ *  for the contact page's Referral card. */
+export async function listReferralCodesForContact(contactId: number) {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const codes = await db.select().from(referralCodes)
+      .where(and(eq(referralCodes.orgId, orgId), eq(referralCodes.contactId, contactId)))
+      .orderBy(desc(referralCodes.createdAt));
+    if (codes.length === 0) return [];
+
+    const rewards = await db.select().from(referralRewards)
+      .where(and(eq(referralRewards.orgId, orgId), inArray(referralRewards.referralCodeId, codes.map((c) => c.id))));
+
+    return codes.map((c) => {
+      const codeRewards = rewards.filter((r) => r.referralCodeId === c.id);
+      return {
+        ...c,
+        leadCount: codeRewards.length,
+        wonCount: codeRewards.filter((r) => r.status !== "pending").length,
+        rewards: codeRewards,
+      };
+    });
+  });
+}
+
+export async function markReferralRewardPaidAction(rewardId: number, paidOn: string) {
+  await requirePerm("leads");
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const [row] = await db.select({ id: referralRewards.id, status: referralRewards.status, contactId: referralCodes.contactId })
+      .from(referralRewards)
+      .innerJoin(referralCodes, eq(referralCodes.id, referralRewards.referralCodeId))
+      .where(and(eq(referralRewards.orgId, orgId), eq(referralRewards.id, rewardId))).limit(1);
+    if (!row) throw new Error("Reward not found");
+    if (row.status !== "earned") throw new Error("Only earned rewards can be marked paid");
+    await db.update(referralRewards).set({ status: "paid", paidOn }).where(eq(referralRewards.id, rewardId));
+    await logAudit({ action: "referral_reward.paid", module: "leads", recordId: rewardId });
+    revalidatePath(`/contacts/${row.contactId}`);
+    return { success: true };
+  });
+}
+
 /** Leads still "new" more than 2 hours after creation — the dashboard SLA banner. */
 export async function leadSlaFlags() {
   return withOrg(async () => {

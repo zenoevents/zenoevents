@@ -16,6 +16,8 @@ import { resolvePeriod } from "@/lib/report-period";
 import { ReportFilters } from "@/components/ReportFilters";
 import { ClientPortalTab } from "@/components/ClientPortalTab";
 import { ContactOpeningBalanceCard } from "@/components/ContactOpeningBalanceCard";
+import { ReferralCard } from "@/components/ReferralCard";
+import { listReferralCodesForContact, buildLeadFormUrl } from "@/lib/leads";
 
 export const dynamic = "force-dynamic";
 
@@ -184,6 +186,10 @@ export default async function ContactDetail({
   const activeTabDef = TABS.find((t) => t.key === tab);
   const today = todayISO();
 
+  const [referralCodes, referralBaseUrl] = isCustomer
+    ? await Promise.all([listReferralCodesForContact(cid), buildLeadFormUrl("referral")])
+    : [[], null];
+
   const DocTable = ({ type, newHref, newLabel }: { type: string; newHref: string; newLabel: string }) => {
     const rows = allDocs.filter((d) => d.type === type);
     return (
@@ -286,6 +292,10 @@ export default async function ContactDetail({
                     bankAccounts={moneyAccounts}
                   />
                 </div>
+              )}
+
+              {isCustomer && (
+                <ReferralCard contactId={cid} baseFormUrl={referralBaseUrl} codes={referralCodes} />
               )}
 
               <h2 className="text-[15px] font-semibold mt-6 mb-3">Recent documents</h2>
