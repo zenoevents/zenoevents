@@ -1145,3 +1145,65 @@ CREATE TABLE IF NOT EXISTS manual_payments (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_manual_payments_org ON manual_payments(org_id);
+
+-- Leads feature: multi-channel capture, pipeline, conversion, referrals.
+ALTER TABLE org ADD COLUMN IF NOT EXISTS lead_form_slug TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_org_lead_form_slug ON org(lead_form_slug);
+
+CREATE TABLE IF NOT EXISTS leads (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  channel TEXT NOT NULL,
+  channel_detail TEXT,
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  event_type TEXT,
+  event_date TEXT,
+  message TEXT,
+  details JSONB,
+  stage TEXT NOT NULL DEFAULT 'new',
+  lost_reason TEXT,
+  assigned_member_id INTEGER,
+  contacted_at TEXT,
+  converted_contact_id INTEGER,
+  converted_project_id INTEGER,
+  referred_by_contact_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_leads_org ON leads(org_id);
+CREATE INDEX IF NOT EXISTS idx_leads_org_stage ON leads(org_id, stage);
+
+CREATE TABLE IF NOT EXISTS lead_channels (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  channel TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  config JSONB,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lead_channels_org_channel ON lead_channels(org_id, channel);
+
+CREATE TABLE IF NOT EXISTS referral_codes (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  code TEXT NOT NULL UNIQUE,
+  reward_type TEXT NOT NULL DEFAULT 'none',
+  reward_value INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_referral_codes_org_contact ON referral_codes(org_id, contact_id);
+
+CREATE TABLE IF NOT EXISTS referral_rewards (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  referral_code_id INTEGER NOT NULL REFERENCES referral_codes(id),
+  lead_id INTEGER NOT NULL REFERENCES leads(id),
+  project_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'pending',
+  note TEXT,
+  paid_on TEXT,
+  created_at TEXT NOT NULL
+);

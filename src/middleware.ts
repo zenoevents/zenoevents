@@ -22,8 +22,9 @@ export async function middleware(request: NextRequest) {
   }
   // Public receipt links: the token in the URL is the credential.
   // Customer portal (/p/) authenticates with its own phone+OTP session.
-  // Rate-limited to blunt token brute-forcing and scraping.
-  if (path.startsWith("/r/") || path.startsWith("/p/") || path.startsWith("/portal/")) {
+  // Public lead-capture form (/lead/) — org resolved via leadFormSlug only.
+  // Rate-limited to blunt token brute-forcing, scraping, and form spam.
+  if (path.startsWith("/r/") || path.startsWith("/p/") || path.startsWith("/portal/") || path.startsWith("/lead/")) {
     if (!rateLimit(`pub:${clientIp(request)}`, 60, 60_000)) {
       return new NextResponse("Too many requests", { status: 429 });
     }

@@ -5,6 +5,7 @@ import { db, employees, loanLedger, loanInstallments, payrollRuns } from "@/db";
 import { and, eq, asc } from "drizzle-orm";
 import { getOrg } from "@/lib/org";
 import { LoanPdf } from "@/lib/pdf/LoanPdf";
+import { contentDisposition } from "@/lib/pdf-filename";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
+      "Content-Disposition": contentDisposition(download ? "attachment" : "inline", filename, `Loan_Statement_${loan.id}.pdf`),
     },
   });
 }

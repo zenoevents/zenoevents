@@ -6,7 +6,7 @@ import { withOrg, currentOrgId } from "./org";
 export type AuditModule =
   | "contacts" | "quotes" | "invoices" | "credit_notes" | "bills" | "purchase_orders"
   | "expenses" | "payments" | "banking" | "items" | "payroll" | "staff" | "settings"
-  | "accountant" | "reports" | "leave_requests" | "expense_claims" | "projects";
+  | "accountant" | "reports" | "leave_requests" | "expense_claims" | "projects" | "leads";
 
 /**
  * Records one line in the org's audit trail. Reads the acting user off the

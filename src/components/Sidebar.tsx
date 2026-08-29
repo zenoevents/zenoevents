@@ -35,6 +35,7 @@ const groups: {
     label: "Selling",
     items: [
       { href: "/contacts", label: "Customers & Vendors", icon: "👥", perm: "contacts" },
+      { href: "/leads", label: "Leads", icon: "🧲", perm: "leads" },
       { href: "/pipeline", label: "Deals", icon: "🎯", perm: "pipeline" },
       { href: "/sales/quotes", label: "Quotes", icon: "📝", perm: "quotes" },
       { href: "/sales/quote-templates", label: "Quote Templates", icon: "🗒️", perm: "quote_templates" },

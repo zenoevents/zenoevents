@@ -8,6 +8,7 @@ import {
   serial,
   index,
   uniqueIndex,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -24,6 +25,10 @@ export const org = pgTable("org", {
   name: text("name").notNull().default(""),
   /** Public customer-portal slug: zeno.com/p/<slug> */
   portalSlug: text("portal_slug").unique(),
+  /** Public lead-capture form slug: zeno.com/lead/<slug> — separate from
+   *  portalSlug so the receipts-portal and lead-capture features stay
+   *  decoupled. Generated on first enabling any public lead channel. */
+  leadFormSlug: text("lead_form_slug").unique(),
   kraPin: text("kra_pin"),
   vatRegistered: boolean("vat_registered").notNull().default(true),
   address: text("address"),
@@ -1600,3 +1605,79 @@ export const manifestLines = pgTable("manifest_lines", {
   orgManifestIdx: index("idx_manifest_lines_org_manifest").on(t.orgId, t.manifestId),
   inventoryItemIdx: index("idx_manifest_lines_inventory_item").on(t.inventoryItemId),
 }));
+
+/** Pre-contact lead capture — upstream of `contacts`/`deals`/`projects`
+ *  entirely. A lead lives here until "won," at which point it creates (or
+ *  reuses, by phone) a contacts row and a new projects row that then
+ *  starts its own life at status "lead" as normal — the two "lead" words
+ *  never collide: different tables, different columns, no shared enum. */
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  channel: text("channel").notNull(), // instagram | facebook | website | whatsapp | qr | manual | referral
+  channelDetail: text("channel_detail"), // campaign/UTM label or QR source name, free text
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  eventType: text("event_type"),
+  eventDate: text("event_date"),
+  message: text("message"),
+  details: jsonb("details"), // event-type-conditional fields (guest count, company name, ...)
+  stage: text("stage").notNull().default("new"), // new | contacted | quote_sent | won | lost
+  lostReason: text("lost_reason"),
+  assignedMemberId: integer("assigned_member_id"),
+  contactedAt: text("contacted_at"), // set the moment stage first leaves "new" — backs the SLA flag
+  convertedContactId: integer("converted_contact_id"),
+  convertedProjectId: integer("converted_project_id"),
+  referredByContactId: integer("referred_by_contact_id"), // channel=referral, code resolved to an existing contact
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgIdx: index("idx_leads_org").on(t.orgId),
+  orgStageIdx: index("idx_leads_org_stage").on(t.orgId, t.stage),
+}));
+
+/** Per-org toggle + config for each lead capture channel. Manual/Referral
+ *  are always available (staff-initiated, nothing public to leak); the
+ *  toggle matters for the public-facing channels that each expose a
+ *  link/embed/QR the admin explicitly chooses to hand out. */
+export const leadChannels = pgTable("lead_channels", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  channel: text("channel").notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  config: jsonb("config"), // channel-specific, e.g. {whatsappNumber} for whatsapp
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgChannelIdx: uniqueIndex("idx_lead_channels_org_channel").on(t.orgId, t.channel),
+}));
+
+/** A referring client's shareable code — resolved on the public lead form
+ *  via ?ref=<code> so attribution never depends on a typed-in name. */
+export const referralCodes = pgTable("referral_codes", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  contactId: integer("contact_id").notNull().references(() => contacts.id),
+  code: text("code").notNull().unique(),
+  rewardType: text("reward_type").notNull().default("none"), // none | discount_pct | cash
+  rewardValue: integer("reward_value").notNull().default(0), // pct points or cents, per rewardType
+  active: boolean("active").notNull().default(true),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgContactIdx: index("idx_referral_codes_org_contact").on(t.orgId, t.contactId),
+}));
+
+/** One row per lead that converts through a referral code, tracked to
+ *  payout. Deliberately separate from manualPayments/billingPayments —
+ *  this pays a referring client, not the org, a different direction of
+ *  money and audience entirely. */
+export const referralRewards = pgTable("referral_rewards", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  referralCodeId: integer("referral_code_id").notNull().references(() => referralCodes.id),
+  leadId: integer("lead_id").notNull().references(() => leads.id),
+  projectId: integer("project_id"), // set once the lead converts
+  status: text("status").notNull().default("pending"), // pending | earned | paid
+  note: text("note"),
+  paidOn: text("paid_on"),
+  createdAt: text("created_at").notNull(),
+});
