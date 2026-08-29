@@ -467,6 +467,42 @@ export async function convertLeadAction(leadId: number): Promise<{ contactId: nu
   }
 }
 
+const CHANNEL_LABELS: Record<string, string> = {
+  instagram: "Instagram", facebook: "Facebook", website: "Website", whatsapp: "WhatsApp",
+  qr: "QR code", manual: "Manual / Referral", referral: "Manual / Referral",
+};
+
+/** Per-channel lead counts, contact/quote/win rates, and a stage breakdown
+ *  — the source performance table + chart on the Leads dashboard. Manual
+ *  and referral are folded into one "Manual / Referral" row since both are
+ *  staff-initiated, not ad-spend channels an admin is comparing ROI across. */
+export async function sourcePerformance() {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const rows = await db.select({ channel: leads.channel, stage: leads.stage }).from(leads).where(eq(leads.orgId, orgId));
+
+    type Bucket = { total: number; new: number; contacted: number; quote_sent: number; won: number; lost: number };
+    const byLabel = new Map<string, Bucket>();
+    for (const r of rows) {
+      const label = CHANNEL_LABELS[r.channel] ?? r.channel;
+      const b = byLabel.get(label) ?? { total: 0, new: 0, contacted: 0, quote_sent: 0, won: 0, lost: 0 };
+      b.total++;
+      const stage = (r.stage in b ? r.stage : "new") as keyof Omit<Bucket, "total">;
+      b[stage]++;
+      byLabel.set(label, b);
+    }
+
+    return Array.from(byLabel.entries()).map(([label, b]) => ({
+      channel: label,
+      total: b.total,
+      contactRate: b.total ? Math.round(((b.total - b.new) / b.total) * 100) : 0,
+      quoteRate: b.total ? Math.round(((b.quote_sent + b.won) / b.total) * 100) : 0,
+      winRate: b.total ? Math.round((b.won / b.total) * 100) : 0,
+      stageCounts: b,
+    })).sort((a, b) => b.total - a.total);
+  });
+}
+
 /** Leads still "new" more than 2 hours after creation — the dashboard SLA banner. */
 export async function leadSlaFlags() {
   return withOrg(async () => {

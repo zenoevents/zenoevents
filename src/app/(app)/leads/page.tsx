@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
-import { listLeads, createLeadAction, leadSlaFlags } from "@/lib/leads";
+import { listLeads, createLeadAction, leadSlaFlags, sourcePerformance } from "@/lib/leads";
 import { LEAD_STAGES, LEAD_STAGE_LABELS } from "@/lib/lead-constants";
 import { PageHeader } from "@/components/ui";
+import { StackedBarChart } from "@/components/analytics/Charts";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ const CHANNEL_ICON: Record<string, string> = {
 
 export default async function LeadsPage() {
   await requirePerm("leads");
-  const [rows, sla] = await Promise.all([listLeads(), leadSlaFlags()]);
+  const [rows, sla, perf] = await Promise.all([listLeads(), leadSlaFlags(), sourcePerformance()]);
 
   async function addLead(formData: FormData) {
     "use server";
@@ -49,6 +50,49 @@ export default async function LeadsPage() {
           + Add lead
         </button>
       </form>
+
+      {perf.length > 0 && (
+        <div className="card p-4 mb-5">
+          <div className="text-[13px] font-semibold text-[var(--color-ink-600)] mb-3">Source performance</div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12.5px]">
+                <thead>
+                  <tr className="text-left text-[11px] text-[var(--color-ink-400)] hairline-b">
+                    <th className="pb-2 font-medium">Source</th>
+                    <th className="pb-2 font-medium text-right">Leads</th>
+                    <th className="pb-2 font-medium text-right">Contacted</th>
+                    <th className="pb-2 font-medium text-right">Quoted</th>
+                    <th className="pb-2 font-medium text-right">Won</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perf.map((p) => (
+                    <tr key={p.channel} className="hairline-t">
+                      <td className="py-1.5">{p.channel}</td>
+                      <td className="py-1.5 text-right tnum">{p.total}</td>
+                      <td className="py-1.5 text-right tnum">{p.contactRate}%</td>
+                      <td className="py-1.5 text-right tnum">{p.quoteRate}%</td>
+                      <td className="py-1.5 text-right tnum font-medium text-emerald-700">{p.winRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <StackedBarChart
+              height={220}
+              data={perf.map((p) => ({ label: p.channel, ...p.stageCounts }))}
+              series={[
+                { key: "new", label: "New", color: "#d2d2d7" },
+                { key: "contacted", label: "Contacted", color: "#93c5fd" },
+                { key: "quote_sent", label: "Quote sent", color: "#fde68a" },
+                { key: "won", label: "Won", color: "#6ee7b7" },
+                { key: "lost", label: "Lost", color: "#fca5a5" },
+              ]}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-3 items-start overflow-x-auto pb-2 lg:grid lg:grid-cols-5">
         {LEAD_STAGES.map((stage) => {
