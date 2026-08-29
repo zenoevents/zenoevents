@@ -1,10 +1,10 @@
 "use server";
 
-import { db, leads, leadChannels, members, notifications, contacts, org, referralCodes, referralRewards } from "@/db";
+import { db, leads, leadChannels, members, notifications, contacts, contactGroupMemberships, org, referralCodes, referralRewards, customerGroups, projects } from "@/db";
 import { and, eq, inArray, desc, ne } from "drizzle-orm";
 import { withOrg, currentOrgId, getOrg } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
-import { nowISO } from "@/lib/money";
+import { nowISO, todayISO } from "@/lib/money";
 import { logAudit } from "@/lib/audit";
 import { notifyOrg } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
@@ -379,6 +379,91 @@ export async function submitPublicLeadAction(input: PublicLeadSubmission): Promi
     return { success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not submit — please try again." };
+  }
+}
+
+/** Finds-or-creates the org's "Leads" customer group — only orgs with
+ *  customerGroupsEnabled require a group on a customer at all, and the
+ *  conversion flow shouldn't force the admin to pick one mid-conversion
+ *  (same auto-create-by-name precedent as CSV contact import). */
+async function ensureLeadsGroupId(orgId: number): Promise<number> {
+  const [existing] = await db.select({ id: customerGroups.id }).from(customerGroups)
+    .where(and(eq(customerGroups.orgId, orgId), eq(customerGroups.name, "Leads"))).limit(1);
+  if (existing) return existing.id;
+  const [created] = await db.insert(customerGroups).values({ orgId, name: "Leads", createdAt: nowISO() }).returning();
+  return created.id;
+}
+
+/**
+ * Lead → Contact + Project. Dedupes the contact by phone (reuses an
+ * existing contact rather than creating a duplicate customer record) —
+ * project creation always makes a fresh project, even for a repeat client,
+ * since each event is its own project regardless of who's booking it.
+ * Idempotent: calling again on an already-converted lead just returns the
+ * existing links rather than creating a second project.
+ */
+export async function convertLeadAction(leadId: number): Promise<{ contactId: number; projectId: number } | { error: string }> {
+  await requirePerm("leads");
+  try {
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const [lead] = await db.select().from(leads).where(and(eq(leads.orgId, orgId), eq(leads.id, leadId))).limit(1);
+      if (!lead) throw new Error("Lead not found");
+      if (lead.convertedProjectId && lead.convertedContactId) {
+        return { contactId: lead.convertedContactId, projectId: lead.convertedProjectId };
+      }
+
+      let contactId: number;
+      const existing = lead.phone
+        ? (await db.select({ id: contacts.id }).from(contacts).where(and(eq(contacts.orgId, orgId), eq(contacts.phone, lead.phone))).limit(1))[0]
+        : undefined;
+      if (existing) {
+        contactId = existing.id;
+      } else {
+        const o = await getOrg();
+        const groupIds = o.customerGroupsEnabled ? [await ensureLeadsGroupId(orgId)] : [];
+        const [created] = await db.insert(contacts).values({
+          orgId, kind: "customer", displayName: lead.name, phone: lead.phone || null, email: lead.email || null,
+          groupId: groupIds[0] ?? null, createdAt: nowISO(),
+        }).returning();
+        contactId = created.id;
+        if (groupIds.length > 0) {
+          await db.insert(contactGroupMemberships).values(groupIds.map((gid) => ({ orgId, contactId, groupId: gid })));
+        }
+      }
+
+      const [project] = await db.insert(projects).values({
+        orgId, contactId,
+        name: `${lead.name}${lead.eventType ? ` — ${lead.eventType}` : ""}`,
+        eventType: lead.eventType,
+        eventDate: lead.eventDate || todayISO(),
+        notes: lead.message,
+        status: "lead",
+        createdAt: nowISO(),
+      }).returning({ id: projects.id });
+
+      await db.update(leads).set({
+        stage: "won",
+        convertedContactId: contactId,
+        convertedProjectId: project.id,
+        contactedAt: lead.contactedAt ?? nowISO(),
+      }).where(eq(leads.id, leadId));
+
+      // Referral reward, if this lead came in via a code — flips pending -> earned.
+      const [reward] = await db.select({ id: referralRewards.id }).from(referralRewards)
+        .where(and(eq(referralRewards.orgId, orgId), eq(referralRewards.leadId, leadId))).limit(1);
+      if (reward) {
+        await db.update(referralRewards).set({ status: "earned", projectId: project.id }).where(eq(referralRewards.id, reward.id));
+      }
+
+      await logAudit({ action: "lead.convert", module: "leads", recordId: leadId, recordLabel: lead.name, detail: `-> project #${project.id}`, projectId: project.id });
+      revalidatePath("/leads");
+      revalidatePath(`/leads/${leadId}`);
+      revalidatePath("/projects");
+      return { contactId, projectId: project.id };
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not convert this lead" };
   }
 }
 

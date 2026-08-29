@@ -7,6 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { getLead, assignLeadAction } from "@/lib/leads";
 import { PageHeader } from "@/components/ui";
 import { StageForm } from "./StageForm";
+import { ConvertButton } from "./ConvertButton";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <div className="card p-4 space-y-2">
             <div className="text-[13px] font-semibold text-[var(--color-ink-600)]">Stage</div>
             <StageForm leadId={leadId} currentStage={lead.stage} currentLostReason={lead.lostReason} />
+          </div>
+
+          <div className="card p-4 space-y-2">
+            <div className="text-[13px] font-semibold text-[var(--color-ink-600)]">Conversion</div>
+            <p className="text-[11.5px] text-[var(--color-ink-400)]">Creates (or reuses, by phone) a customer and a new project pre-filled from this lead.</p>
+            <ConvertButton leadId={leadId} alreadyConvertedProjectId={lead.convertedProjectId} />
           </div>
         </div>
       </div>
