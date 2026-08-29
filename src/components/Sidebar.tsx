@@ -223,7 +223,7 @@ export function Sidebar({ orgName, orgEmail, logoUrl, perms, roleLabel, timeTrac
 
       {/* Mobile drawer */}
       {open && (
-        <div className="md:hidden no-print fixed inset-0 z-50">
+        <div className="md:hidden no-print fixed inset-0 z-[80]">
           <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
           <aside className="absolute left-0 top-0 h-full w-[270px] max-w-[85vw] bg-[var(--color-ink-50)] flex flex-col shadow-xl">
             <button
