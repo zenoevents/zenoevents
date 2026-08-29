@@ -603,6 +603,25 @@ export async function markReferralRewardPaidAction(rewardId: number, paidOn: str
   });
 }
 
+/** Org-wide referral reward totals — pending/earned value not yet paid,
+ *  for the Leads dashboard's summary row. */
+export async function referralSummary() {
+  return withOrg(async () => {
+    const orgId = currentOrgId();
+    const rows = await db.select({ status: referralRewards.status, rewardType: referralCodes.rewardType, rewardValue: referralCodes.rewardValue })
+      .from(referralRewards)
+      .innerJoin(referralCodes, eq(referralCodes.id, referralRewards.referralCodeId))
+      .where(eq(referralRewards.orgId, orgId));
+    const owed = rows.filter((r) => r.status === "earned" && r.rewardType === "cash");
+    return {
+      totalCodes: await db.select({ id: referralCodes.id }).from(referralCodes).where(eq(referralCodes.orgId, orgId)).then((r) => r.length),
+      pendingCount: rows.filter((r) => r.status === "pending").length,
+      earnedUnpaidCount: owed.length,
+      earnedUnpaidCents: owed.reduce((s, r) => s + r.rewardValue, 0),
+    };
+  });
+}
+
 /** Leads still "new" more than 2 hours after creation — the dashboard SLA banner. */
 export async function leadSlaFlags() {
   return withOrg(async () => {

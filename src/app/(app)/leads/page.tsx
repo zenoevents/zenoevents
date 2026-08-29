@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
-import { listLeads, createLeadAction, leadSlaFlags, sourcePerformance } from "@/lib/leads";
+import { listLeads, createLeadAction, leadSlaFlags, sourcePerformance, referralSummary } from "@/lib/leads";
 import { LEAD_STAGES, LEAD_STAGE_LABELS } from "@/lib/lead-constants";
 import { PageHeader } from "@/components/ui";
 import { StackedBarChart } from "@/components/analytics/Charts";
+import { fmtKES } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,18 @@ const CHANNEL_ICON: Record<string, string> = {
 
 export default async function LeadsPage() {
   await requirePerm("leads");
-  const [rows, sla, perf] = await Promise.all([listLeads(), leadSlaFlags(), sourcePerformance()]);
+  const [rows, sla, perf, referrals] = await Promise.all([listLeads(), leadSlaFlags(), sourcePerformance(), referralSummary()]);
+
+  const total = rows.length;
+  const open = rows.filter((r) => r.stage !== "won" && r.stage !== "lost").length;
+  const won = rows.filter((r) => r.stage === "won").length;
+  const winRate = total ? Math.round((won / total) * 100) : 0;
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const newThisWeek = rows.filter((r) => r.createdAt >= weekAgo).length;
+  const contactedLeads = rows.filter((r) => r.contactedAt);
+  const avgResponseHours = contactedLeads.length
+    ? Math.round(contactedLeads.reduce((s, r) => s + (new Date(r.contactedAt!).getTime() - new Date(r.createdAt).getTime()) / 3_600_000, 0) / contactedLeads.length)
+    : null;
 
   async function addLead(formData: FormData) {
     "use server";
@@ -25,6 +37,15 @@ export default async function LeadsPage() {
   return (
     <>
       <PageHeader title="Leads" subtitle="Inquiries from every channel, in one pipeline — new through won or lost." />
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+        <KpiTile label="Total leads" value={String(total)} />
+        <KpiTile label="Open" value={String(open)} />
+        <KpiTile label="Win rate" value={`${winRate}%`} tone={winRate >= 30 ? "good" : undefined} />
+        <KpiTile label="New this week" value={String(newThisWeek)} />
+        <KpiTile label="Avg. time to contact" value={avgResponseHours === null ? "—" : avgResponseHours < 1 ? "<1h" : `${avgResponseHours}h`} tone={avgResponseHours !== null && avgResponseHours > 2 ? "warn" : undefined} />
+        <KpiTile label="Referral rewards owed" value={referrals.earnedUnpaidCount > 0 ? fmtKES(referrals.earnedUnpaidCents) : "—"} tone={referrals.earnedUnpaidCount > 0 ? "warn" : undefined} />
+      </div>
 
       {sla.length > 0 && (
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
@@ -126,5 +147,15 @@ export default async function LeadsPage() {
         })}
       </div>
     </>
+  );
+}
+
+function KpiTile({ label, value, tone }: { label: string; value: string; tone?: "good" | "warn" }) {
+  const toneClass = tone === "good" ? "text-emerald-700" : tone === "warn" ? "text-amber-700" : "";
+  return (
+    <div className="card px-4 py-3">
+      <div className="text-[11px] text-[var(--color-ink-400)]">{label}</div>
+      <div className={`text-[19px] font-semibold tnum mt-0.5 ${toneClass}`}>{value}</div>
+    </div>
   );
 }
