@@ -96,10 +96,10 @@ export async function seedOrgDefaults(orgId: number) {
   const { subscriptions, itemTypes } = await import("@/db");
   const now = new Date().toISOString();
 
-  // 7-day full-access trial, then a hard lockout until the admin
+  // 30-day full-access trial, then a hard lockout until the admin
   // reactivates (manually, or via a successful "Pay now" payment).
   const trialEnd = new Date();
-  trialEnd.setDate(trialEnd.getDate() + 7);
+  trialEnd.setDate(trialEnd.getDate() + 30);
   await db.insert(subscriptions).values({
     orgId,
     plan: "trial",
