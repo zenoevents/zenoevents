@@ -36,7 +36,7 @@ export default async function ClientPortalLayout({
         <div className="max-w-6xl mx-auto">
           <div className="bg-white hairline shadow-[var(--shadow-card)] rounded-3xl px-5 py-3 flex items-center gap-5">
             <Link
-              href={`/portal/${orgSlug}/dashboard`}
+              href={`/portal/${orgSlug}/projects`}
               className="shrink-0 font-bold text-[15px] tracking-tight whitespace-nowrap"
             >
               {o.name}

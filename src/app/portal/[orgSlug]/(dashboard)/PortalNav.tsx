@@ -4,28 +4,28 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
-  { href: "dashboard", label: "Overview" },
+  { href: "projects", label: "Projects" },
   { href: "documents", label: "Invoices & Quotes" },
-  { href: "deals", label: "Projects" },
+  { href: "dashboard", label: "Overview" },
   { href: "knowledge", label: "Help & Articles" },
   { href: "profile", label: "Profile" },
 ];
 
 const CRUMB: Record<string, string> = {
+  projects: "Projects",
   dashboard: "Dashboard",
   documents: "Invoices & Quotes",
-  deals: "Projects",
   knowledge: "Help & Articles",
   profile: "Profile",
 };
 
 export function PortalBreadcrumb({ orgSlug }: { orgSlug: string }) {
   const pathname = usePathname();
-  const seg = pathname.split("/").filter(Boolean)[2] ?? "dashboard";
-  const label = CRUMB[seg] ?? "Dashboard";
+  const seg = pathname.split("/").filter(Boolean)[2] ?? "projects";
+  const label = CRUMB[seg] ?? "Projects";
   return (
     <div className="flex items-center gap-1.5 text-[13px] text-[var(--color-ink-400)]">
-      <Link href={`/portal/${orgSlug}/dashboard`} className="hover:text-[var(--color-ink-600)]">Home</Link>
+      <Link href={`/portal/${orgSlug}/projects`} className="hover:text-[var(--color-ink-600)]">Home</Link>
       <span>/</span>
       <span className="text-[var(--color-ink-600)] font-medium">{label}</span>
     </div>

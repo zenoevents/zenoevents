@@ -20,7 +20,7 @@ export default function ClientPortalLogin() {
       try {
         const res = await portalLoginAction(slug, email, password);
         if (res.error) setError(res.error);
-        else router.push(`/portal/${slug}/dashboard`);
+        else router.push(`/portal/${slug}/projects`);
       } catch (err: any) {
         setError(err.message || "An error occurred");
       }

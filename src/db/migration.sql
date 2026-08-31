@@ -1210,3 +1210,7 @@ CREATE TABLE IF NOT EXISTS referral_rewards (
 
 -- Leads Batch 5: past-events Instagram post embed on the public lead form.
 ALTER TABLE org ADD COLUMN IF NOT EXISTS instagram_post_urls JSONB;
+
+-- Client portal project-based view + contract client-accept flow.
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS signature_method TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS portal_accepted_ip TEXT;

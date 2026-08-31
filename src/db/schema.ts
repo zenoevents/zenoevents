@@ -1459,6 +1459,11 @@ export const contracts = pgTable("contracts", {
   signaturePhotoPath: text("signature_photo_path"), // storage path — private bucket, signed URL on read
   signedAt: text("signed_at"),
   signedByName: text("signed_by_name"),
+  // wet_ink | portal_click — null on rows predating this column (implicitly
+  // wet_ink if signedAt is set). signedAt/signedByName stay the single
+  // source of truth for "when/who" regardless of which method was used.
+  signatureMethod: text("signature_method"),
+  portalAcceptedIp: text("portal_accepted_ip"), // best-effort audit trail, portal_click only
   createdAt: text("created_at").notNull(),
 }, (t) => ({
   orgProjectIdx: index("idx_contracts_org_project").on(t.orgId, t.projectId),
