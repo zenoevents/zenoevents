@@ -14,6 +14,7 @@ import { listDamageReportsForProject } from "@/lib/damage-reports";
 import { LINE_STATUSES, lineFloorStage } from "@/lib/manifest-status";
 import { damageReports } from "@/db";
 import { type LifecycleStage } from "@/lib/lifecycle-stage";
+import { saveContact } from "@/lib/actions";
 
 export async function listProjects() {
   return withOrg(async () => {
@@ -125,40 +126,74 @@ export async function projectDocuments(id: number) {
   });
 }
 
-export async function createProjectAction(formData: FormData) {
-  await requirePerm("projects");
-  return withOrg(async () => {
-    const orgId = currentOrgId();
-    const name = (formData.get("name") as string)?.trim();
-    const eventDate = formData.get("eventDate") as string;
-    const eventType = (formData.get("eventType") as string) || null;
-    const venue = (formData.get("venue") as string) || null;
-    const colorTheme = (formData.get("colorTheme") as string) || null;
-    const contactIdRaw = formData.get("contactId") as string;
-    const contactId = contactIdRaw ? parseInt(contactIdRaw, 10) : null;
-    const budgetCents = Math.round(parseFloat((formData.get("budget") as string) || "0") * 100);
-    const notes = (formData.get("notes") as string) || null;
+/**
+ * Creates a project — either against an existing client, or (mode="new")
+ * creates the client inline in the same submit via saveContact(), so
+ * staff never have to leave this form, create a contact elsewhere, then
+ * come back. That detour was the exact gap that made a fresh project's
+ * first quote/invoice dead-end on an empty customer picker: a project
+ * created "still a lead" (no contactId) has nothing for the document
+ * editor to pre-fill even though ?project= is set.
+ * Returns instead of throwing/redirecting so the client form can show a
+ * proper inline error (a bare thrown error in a plain <form action> has
+ * no visible failure state — the same class of bug already found and
+ * fixed once this session on the Leads stage-update form).
+ */
+export async function createProjectWithClientAction(formData: FormData): Promise<{ success: true; id: number } | { error: string }> {
+  try {
+    await requirePerm("projects");
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const name = (formData.get("name") as string)?.trim();
+      const eventDate = formData.get("eventDate") as string;
+      const eventType = (formData.get("eventType") as string) || null;
+      const venue = (formData.get("venue") as string) || null;
+      const colorTheme = (formData.get("colorTheme") as string) || null;
+      const budgetCents = Math.round(parseFloat((formData.get("budget") as string) || "0") * 100);
+      const notes = (formData.get("notes") as string) || null;
 
-    if (!name || !eventDate) throw new Error("Name and event date are required");
+      if (!name || !eventDate) throw new Error("Name and event date are required");
 
-    const [row] = await db.insert(projects).values({
-      orgId,
-      contactId,
-      name,
-      eventType,
-      venue,
-      colorTheme,
-      eventDate,
-      budgetCents: Number.isFinite(budgetCents) ? budgetCents : 0,
-      notes,
-      status: "lead",
-      createdAt: nowISO(),
-    }).returning({ id: projects.id });
+      const mode = formData.get("mode") as string;
+      let contactId: number | null = null;
 
-    await logAudit({ action: "project.create", module: "projects", recordId: row.id, recordLabel: name, projectId: row.id });
-    revalidatePath("/projects");
-    redirect(`/projects/${row.id}`);
-  });
+      if (mode === "new") {
+        const displayName = (formData.get("clientName") as string)?.trim();
+        if (!displayName) throw new Error("Client name is required");
+        const groupIdRaw = formData.get("clientGroupId") as string;
+        contactId = await saveContact({
+          kind: "customer",
+          displayName,
+          phone: (formData.get("clientPhone") as string) || undefined,
+          email: (formData.get("clientEmail") as string) || undefined,
+          groupIds: groupIdRaw ? [Number(groupIdRaw)] : [],
+        });
+      } else {
+        const contactIdRaw = formData.get("contactId") as string;
+        contactId = contactIdRaw ? parseInt(contactIdRaw, 10) : null;
+      }
+
+      const [row] = await db.insert(projects).values({
+        orgId,
+        contactId,
+        name,
+        eventType,
+        venue,
+        colorTheme,
+        eventDate,
+        budgetCents: Number.isFinite(budgetCents) ? budgetCents : 0,
+        notes,
+        status: "lead",
+        createdAt: nowISO(),
+      }).returning({ id: projects.id });
+
+      await logAudit({ action: "project.create", module: "projects", recordId: row.id, recordLabel: name, projectId: row.id });
+      revalidatePath("/projects");
+      return { success: true, id: row.id };
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not create this project" };
+  }
 }
 
 export async function updateProjectStatusAction(id: number, status: ProjectStatus) {

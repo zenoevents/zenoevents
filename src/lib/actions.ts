@@ -231,6 +231,7 @@ async function _saveContact(data: {
 
   revalidatePath("/contacts");
   if (data.id) revalidatePath(`/contacts/${data.id}`);
+  return contactId!;
 }
 
 async function _addActivity(contactId: number, kind: string, content: string) {
