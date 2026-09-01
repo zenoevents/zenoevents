@@ -1,4 +1,4 @@
-import { db, contacts, items, accounts, bankAccounts, members, documents, documentLines, documentAssignments, costCenters, warehouses, itemGroups, projects } from "@/db";
+import { db, contacts, items, accounts, bankAccounts, members, documents, documentLines, documentAssignments, costCenters, warehouses, itemGroups, projects, customerGroups } from "@/db";
 import { and, eq, inArray, desc } from "drizzle-orm";
 import { getOrg } from "@/lib/org";
 import { getAccess } from "@/lib/access";
@@ -34,9 +34,15 @@ export async function editorOptions(side: "sale" | "purchase") {
   const costCenterRows = await db.select().from(costCenters).where(and(eq(costCenters.orgId, orgId), eq(costCenters.active, true)));
   const warehouseRows = await db.select().from(warehouses).where(and(eq(warehouses.orgId, orgId), eq(warehouses.archived, false)));
   const projectRows = await db.select({ id: projects.id, name: projects.name }).from(projects).where(eq(projects.orgId, orgId)).orderBy(desc(projects.eventDate));
+  const customerGroupRows = await db.select({ id: customerGroups.id, label: customerGroups.name }).from(customerGroups).where(eq(customerGroups.orgId, orgId)).orderBy(customerGroups.name);
 
   return {
     customDocumentColumnName: org.customDocumentColumnName,
+    // For the editor's inline "+ New customer" — same group requirement
+    // _saveContact() enforces, surfaced here so the picker knows whether to
+    // show the group field before the user hits an error on submit.
+    customerGroups: customerGroupRows,
+    customerGroupsRequired: org.customerGroupsEnabled,
     members: memberRows.map((m) => ({ id: m.id, label: m.name || m.email })),
     contacts: contactRows.map((c) => ({ id: c.id, label: c.displayName })),
     // Purchase side only: vendor's saved default payout details, so the bill/

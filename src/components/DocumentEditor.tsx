@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { computeDocument, TAX_CLASSES, type TaxClass } from "@/lib/tax";
 import { fmtKES, parseKES, todayISO } from "@/lib/money";
-import { upsertDocumentAction, createItemFromLine, listCustomerInvoices, type DocLineInput } from "@/lib/actions";
+import { upsertDocumentAction, createItemFromLine, listCustomerInvoices, saveContact, type DocLineInput } from "@/lib/actions";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { DimensionQtyInput } from "@/components/DimensionQtyInput";
 
@@ -107,6 +107,8 @@ export function DocumentEditor({
   defaultNotes,
   projects = [],
   defaultProjectId,
+  customerGroups = [],
+  customerGroupsRequired = false,
 }: {
   type: "invoice" | "quote" | "credit_note" | "bill" | "expense" | "purchase_order";
   contacts: Option[];
@@ -145,10 +147,22 @@ export function DocumentEditor({
    *  quotes/invoices/expenses lists and inside that project's own tabs. */
   projects?: Option[];
   defaultProjectId?: number | null;
+  /** Sale-side only — powers the inline "+ New customer" picker. Mirrors
+   *  the group requirement _saveContact() enforces server-side. */
+  customerGroups?: Option[];
+  customerGroupsRequired?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [contactOptions, setContactOptions] = useState<Option[]>(contacts);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerGroupId, setNewCustomerGroupId] = useState<number | "">("");
+  const [newCustomerPending, setNewCustomerPending] = useState(false);
+  const [newCustomerError, setNewCustomerError] = useState<string | null>(null);
 
   const isSale = type === "invoice" || type === "quote" || type === "credit_note";
   const isExpense = type === "expense";
@@ -268,6 +282,31 @@ export function DocumentEditor({
         setPayoutDestination(saved.destination);
         setPayoutAccountNumber(saved.accountNumber || "");
       }
+    }
+  }
+
+  async function createNewCustomer() {
+    setNewCustomerError(null);
+    const displayName = newCustomerName.trim();
+    if (!displayName) { setNewCustomerError("Name is required"); return; }
+    if (customerGroupsRequired && newCustomerGroupId === "") { setNewCustomerError("Pick a customer group"); return; }
+    setNewCustomerPending(true);
+    try {
+      const id = await saveContact({
+        kind: "customer",
+        displayName,
+        phone: newCustomerPhone || undefined,
+        email: newCustomerEmail || undefined,
+        groupIds: newCustomerGroupId === "" ? [] : [Number(newCustomerGroupId)],
+      });
+      setContactOptions((prev) => [...prev, { id, label: displayName }]);
+      handleContactChange(id);
+      setShowNewCustomer(false);
+      setNewCustomerName(""); setNewCustomerPhone(""); setNewCustomerEmail(""); setNewCustomerGroupId("");
+    } catch (err) {
+      setNewCustomerError(err instanceof Error ? err.message : "Could not create this customer");
+    } finally {
+      setNewCustomerPending(false);
     }
   }
 
@@ -402,16 +441,79 @@ export function DocumentEditor({
       <div className="card p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {!isExpense && (
           <label className="block col-span-2">
-            <span className="text-[12px] font-medium text-[var(--color-ink-600)]">
-              {isSale ? "Customer" : "Vendor"}
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-medium text-[var(--color-ink-600)]">
+                {isSale ? "Customer" : "Vendor"}
+              </span>
+              {isSale && (
+                <button
+                  type="button"
+                  onClick={() => setShowNewCustomer((v) => !v)}
+                  className="text-[11.5px] font-medium text-[var(--color-accent-600)] hover:underline"
+                >
+                  + New customer
+                </button>
+              )}
+            </div>
             <SearchableSelect
               className="mt-1"
-              options={contacts}
+              options={isSale ? contactOptions : contacts}
               value={contactId}
               onChange={handleContactChange}
               placeholder={isSale ? "Search customers…" : "Search vendors…"}
             />
+            {isSale && showNewCustomer && (
+              <div className="mt-2 rounded-lg border border-dashed border-[var(--color-ink-200)] p-3 space-y-2 bg-[var(--color-ink-50)]/40">
+                <input
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  placeholder="Customer name"
+                  className={inputCls}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={newCustomerPhone}
+                    onChange={(e) => setNewCustomerPhone(e.target.value)}
+                    placeholder="Phone"
+                    className={inputCls}
+                  />
+                  <input
+                    value={newCustomerEmail}
+                    onChange={(e) => setNewCustomerEmail(e.target.value)}
+                    placeholder="Email"
+                    className={inputCls}
+                  />
+                </div>
+                {customerGroupsRequired && (
+                  <select
+                    value={newCustomerGroupId}
+                    onChange={(e) => setNewCustomerGroupId(e.target.value ? Number(e.target.value) : "")}
+                    className={inputCls}
+                  >
+                    <option value="">Select a customer group…</option>
+                    {customerGroups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+                  </select>
+                )}
+                {newCustomerError && <div className="text-[11.5px] text-[var(--color-bad)]">{newCustomerError}</div>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={newCustomerPending}
+                    onClick={createNewCustomer}
+                    className="rounded-lg bg-[var(--color-accent-500)] hover:bg-[var(--color-accent-600)] disabled:opacity-50 text-white text-[12.5px] font-medium px-3 py-1.5"
+                  >
+                    {newCustomerPending ? "Creating…" : "Create & select"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCustomer(false)}
+                    className="rounded-lg border border-[var(--color-ink-200)] text-[var(--color-ink-600)] text-[12.5px] font-medium px-3 py-1.5"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </label>
         )}
         {isExpense && (

@@ -33,6 +33,8 @@ export default async function EditInvoicePage({
         customDocumentColumnName={opts.customDocumentColumnName}
         members={opts.members}
         contacts={opts.contacts}
+        customerGroups={opts.customerGroups}
+        customerGroupsRequired={opts.customerGroupsRequired}
         items={opts.items}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}

@@ -31,6 +31,8 @@ export default async function NewQuotePage({
         customDocumentColumnName={opts.customDocumentColumnName}
         members={opts.members}
         contacts={opts.contacts}
+        customerGroups={opts.customerGroups}
+        customerGroupsRequired={opts.customerGroupsRequired}
         items={opts.items}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
