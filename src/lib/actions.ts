@@ -65,6 +65,7 @@ function revalidatePath(path: string, type?: "page" | "layout") {
 
 import { getOrg } from "@/lib/org";
 import { notifyOrg } from "@/lib/notifications";
+import { advanceProjectStatus } from "@/lib/project-status-advance";
 import { logAudit } from "./audit";
 import { buildBalanceAdjustmentLines } from "./account-balance-adjustments";
 import {
@@ -926,6 +927,7 @@ async function _issueClaimedDocument(doc: typeof documents.$inferSelect) {
           .where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, docId)));
       }
       await postInvoice(docId);
+      if (doc.projectId) await advanceProjectStatus(currentOrgId(), doc.projectId, "confirmed", "invoice issued");
       break;
     }
     case "credit_note":
@@ -953,6 +955,7 @@ async function _issueClaimedDocument(doc: typeof documents.$inferSelect) {
       break;
     case "quote":
       await db.update(documents).set({ status: "open" }).where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, docId)));
+      if (doc.projectId) await advanceProjectStatus(currentOrgId(), doc.projectId, "quoted", "quote sent");
       break;
     case "purchase_order":
       await db.update(documents).set({ status: "open" }).where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, docId)));
@@ -969,8 +972,11 @@ async function _voidDoc(docId: number) {
 }
 
 async function _markQuote(docId: number, status: "accepted" | "declined") {
-  await db.update(documents).set({ status }).where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, docId)));
-  if (status === "accepted") {
+  const [row] = await db.update(documents).set({ status })
+    .where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, docId)))
+    .returning({ projectId: documents.projectId });
+  if (status === "accepted" && row?.projectId) {
+    await advanceProjectStatus(currentOrgId(), row.projectId, "confirmed", "quote accepted");
   }
   revalidatePath("/sales");
 }
