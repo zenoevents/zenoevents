@@ -13,13 +13,13 @@ export function LifecycleStepper({ stage, cancelled }: { stage: LifecycleStage; 
 
   return (
     <div className="card px-5 py-4 mb-6 overflow-x-auto">
-      <div className="flex items-center min-w-max">
+      <div className="flex items-center w-full min-w-[760px]">
         {LIFECYCLE_STAGES.map((s, i) => {
           const done = i < currentIndex;
           const current = i === currentIndex;
           return (
-            <div key={s.key} className="flex items-center">
-              <div className="flex flex-col items-center gap-1.5 w-[92px]">
+            <div key={s.key} className={`flex items-center ${i < LIFECYCLE_STAGES.length - 1 ? "flex-1" : ""}`}>
+              <div className="flex flex-col items-center gap-1.5 w-[92px] shrink-0">
                 <div
                   className={`flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-semibold ${
                     current
@@ -36,7 +36,7 @@ export function LifecycleStepper({ stage, cancelled }: { stage: LifecycleStage; 
                 </div>
               </div>
               {i < LIFECYCLE_STAGES.length - 1 && (
-                <div className={`h-[2px] w-6 -mt-4 ${done ? "bg-[var(--color-good)]" : "bg-[var(--color-ink-100)]"}`} />
+                <div className={`h-[2px] flex-1 -mt-4 ${done ? "bg-[var(--color-good)]" : "bg-[var(--color-ink-100)]"}`} />
               )}
             </div>
           );
