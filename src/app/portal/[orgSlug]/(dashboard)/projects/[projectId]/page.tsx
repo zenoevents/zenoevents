@@ -15,6 +15,7 @@ import Link from "next/link";
 import { PageHeader, StatusPill, Money } from "@/components/ui";
 import { milestoneAmountCents } from "@/lib/milestone-amount";
 import { ContractAcceptButtons } from "./ContractAcceptButtons";
+import { QuoteAcceptInline } from "./QuoteAcceptInline";
 import { ActivityRings } from "./ActivityRings";
 import { buildActivityRings } from "./activity-rings-data";
 import { ClientLifecycleStepper, CLIENT_LIFECYCLE_STAGES } from "./ClientLifecycleStepper";
@@ -162,6 +163,9 @@ export default async function ClientPortalProjectDetail({
                           {d.number}
                         </a>
                         <StatusPill status={d.status} />
+                        {d.type === "quote" && d.status === "open" && (
+                          <QuoteAcceptInline orgSlug={orgSlug} documentId={d.id} />
+                        )}
                       </div>
                       <Money cents={d.totalCents} />
                     </div>

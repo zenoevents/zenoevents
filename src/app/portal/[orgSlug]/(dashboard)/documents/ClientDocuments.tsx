@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { portalRequestPaymentAction } from "./actions";
+import { useRouter } from "next/navigation";
+import { portalRequestPaymentAction, portalAcceptQuoteAction, portalDeclineQuoteAction } from "./actions";
 import { StatusPill, TableCard, Th, Td } from "@/components/ui";
 import { fmtKES } from "@/lib/money";
 
@@ -16,11 +17,36 @@ export function ClientDocuments({
   documents: any[];
   payments: any[];
 }) {
+  const router = useRouter();
   const [payDoc, setPayDoc] = useState<any | null>(null);
   const [phone, setPhone] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [quotePending, quoteStart] = useTransition();
+  const [quoteActingId, setQuoteActingId] = useState<number | null>(null);
+  const [quoteError, setQuoteError] = useState<{ id: number; message: string } | null>(null);
+
+  function acceptQuote(id: number) {
+    setQuoteError(null);
+    setQuoteActingId(id);
+    quoteStart(async () => {
+      const res = await portalAcceptQuoteAction(slug, id);
+      if ("error" in res) setQuoteError({ id, message: res.error });
+      else router.refresh();
+    });
+  }
+
+  function declineQuote(id: number) {
+    if (!confirm("Decline this quote? Reach out to us if you'd like changes instead.")) return;
+    setQuoteError(null);
+    setQuoteActingId(id);
+    quoteStart(async () => {
+      const res = await portalDeclineQuoteAction(slug, id);
+      if ("error" in res) setQuoteError({ id, message: res.error });
+      else router.refresh();
+    });
+  }
 
   const handlePay = (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +142,28 @@ export function ClientDocuments({
                   {d.type === "invoice" && ["open", "partial"].includes(d.status) ? fmtKES(d.totalCents - d.paidCents) : "—"}
                 </Td>
                 <Td right>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end items-center gap-2">
+                    {quoteError && quoteError.id === d.id && (
+                      <span className="text-[11.5px] text-[var(--color-bad)]">{quoteError.message}</span>
+                    )}
+                    {d.type === "quote" && d.status === "open" && (
+                      <>
+                        <button
+                          disabled={quotePending && quoteActingId === d.id}
+                          onClick={() => acceptQuote(d.id)}
+                          className="px-3 py-1 bg-[var(--color-good)] text-white text-[12px] font-semibold rounded-md shadow-sm hover:opacity-90 transition-all disabled:opacity-50"
+                        >
+                          {quotePending && quoteActingId === d.id ? "…" : "Accept"}
+                        </button>
+                        <button
+                          disabled={quotePending && quoteActingId === d.id}
+                          onClick={() => declineQuote(d.id)}
+                          className="px-3 py-1 border border-[var(--color-ink-200)] text-[12px] font-medium text-[var(--color-ink-700)] rounded-md hover:bg-[var(--color-ink-50)] transition-all disabled:opacity-50"
+                        >
+                          Decline
+                        </button>
+                      </>
+                    )}
                     {d.type === "invoice" && ["open", "partial"].includes(d.status) && (
                       <button
                         onClick={() => { setPayDoc(d); setPhone(""); setError(null); setSuccess(null); }}

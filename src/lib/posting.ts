@@ -16,6 +16,7 @@ import { currentOrgId } from "@/lib/org";
 import { SYS } from "./coa";
 import { addLot, consumeFifo, consumeForSale, restoreSaleConsumption, checkStockAvailability, type BomComponentConsumption } from "./inventory";
 import { nowISO } from "./money";
+import { advanceProjectStatus } from "./project-status-advance";
 
 /**
  * The posting engine — the ONLY writer to journal_entries / journal_lines.
@@ -268,6 +269,9 @@ export async function postCreditNote(docId: number): Promise<number> {
       const status = remaining <= 0 ? "paid" : inv.paidCents > 0 || inv.creditedCents > 0 ? "partial" : "open";
       if (inv.status !== status) {
         await db.update(documents).set({ status }).where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, inv.id)));
+      }
+      if (status === "paid" && inv.status !== "paid" && inv.projectId) {
+        await advanceProjectStatus(currentOrgId(), inv.projectId, "completed", "invoice paid in full");
       }
     }
   }
@@ -565,6 +569,13 @@ export async function postPayment(paymentId: number): Promise<number> {
       const status = doc.paidCents + doc.creditedCents >= doc.totalCents ? "paid" : "partial";
       if (doc.status !== status) {
         await db.update(documents).set({ status }).where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, doc.id)));
+      }
+      // A customer invoice reaching fully paid is a real "this event's money
+      // is settled" signal — advance the project the same way a quote being
+      // sent/accepted already does. Forward-only, so an earlier invoice
+      // paying off after the project is already completed is a no-op.
+      if (status === "paid" && doc.type === "invoice" && doc.projectId) {
+        await advanceProjectStatus(currentOrgId(), doc.projectId, "completed", "invoice paid in full");
       }
     }
   }
