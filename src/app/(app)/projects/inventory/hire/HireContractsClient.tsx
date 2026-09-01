@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createHireContractAction, markHireReturnedAction } from "@/lib/hire-contracts";
+import { createHireContractAction, markHireReturnedAction, generateHireInvoiceAction } from "@/lib/hire-contracts";
 import { fmtKES } from "@/lib/money";
 import { EmptyState, Th, Td, TableCard } from "@/components/ui";
 
@@ -23,6 +23,7 @@ interface ContractRow {
   depositReturned: boolean;
   status: string;
   effectiveStatus: string;
+  documentId: number | null;
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -54,6 +55,15 @@ export function HireContractsClient({ contracts, hireableItems }: { contracts: C
     start(async () => {
       await markHireReturnedAction(id, depositReturned);
       router.refresh();
+    });
+  }
+
+  function generateInvoice(id: number) {
+    setError(null);
+    start(async () => {
+      const res = await generateHireInvoiceAction(id);
+      if ("error" in res) setError(res.error);
+      else router.refresh();
     });
   }
 
@@ -157,11 +167,22 @@ export function HireContractsClient({ contracts, hireableItems }: { contracts: C
                   </span>
                 </Td>
                 <Td>
-                  {c.status !== "returned" && (
-                    <button onClick={() => markReturned(c.id)} disabled={pending} className="text-[12px] text-[var(--color-accent-600)] font-medium hover:underline disabled:opacity-50">
-                      Mark returned
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {c.status !== "returned" && (
+                      <button onClick={() => markReturned(c.id)} disabled={pending} className="text-[12px] text-[var(--color-accent-600)] font-medium hover:underline disabled:opacity-50">
+                        Mark returned
+                      </button>
+                    )}
+                    {c.documentId ? (
+                      <a href={`/sales/invoices/${c.documentId}`} className="text-[12px] text-[var(--color-ink-500)] font-medium hover:underline">
+                        Invoice ↗
+                      </a>
+                    ) : c.hireFeeCents > 0 ? (
+                      <button onClick={() => generateInvoice(c.id)} disabled={pending} className="text-[12px] text-[var(--color-accent-600)] font-medium hover:underline disabled:opacity-50">
+                        Generate invoice
+                      </button>
+                    ) : null}
+                  </div>
                 </Td>
               </tr>
             ))}

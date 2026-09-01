@@ -1,12 +1,13 @@
 "use server";
 
-import { db, hireContracts, inventoryItems, items, reservations } from "@/db";
+import { db, hireContracts, inventoryItems, items, reservations, contacts, customerGroups, contactGroupMemberships } from "@/db";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { withOrg, currentOrgId } from "@/lib/org";
+import { withOrg, currentOrgId, getOrg } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
 import { nowISO, todayISO } from "@/lib/money";
 import { logAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
+import { upsertDocumentAction } from "@/lib/actions";
 
 /** Hiring the org's own gear out to another event company — a distinct
  *  contract type from an internal project reservation, sharing the same
@@ -32,6 +33,7 @@ export async function listHireContracts() {
         depositCents: hireContracts.depositCents,
         depositReturned: hireContracts.depositReturned,
         status: hireContracts.status,
+        documentId: hireContracts.documentId,
         createdAt: hireContracts.createdAt,
       })
       .from(hireContracts)
@@ -149,5 +151,95 @@ export async function markHireReturnedAction(id: number, depositReturned: boolea
     });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not mark this returned" };
+  }
+}
+
+/** Finds-or-creates a customer contact for the hiring company by name —
+ *  external hire clients aren't necessarily in the CRM. Auto-creates an
+ *  "External Hire" customer group if the org requires one, same
+ *  find-or-create-a-fallback-group pattern already used for lead
+ *  conversion (ensureLeadsGroupId in leads.ts). */
+async function ensureExternalHireContact(orgId: number, name: string, phone: string | null): Promise<number> {
+  const [existing] = await db.select({ id: contacts.id }).from(contacts)
+    .where(and(eq(contacts.orgId, orgId), eq(contacts.displayName, name), inArray(contacts.kind, ["customer", "both"]))).limit(1);
+  if (existing) return existing.id;
+
+  const o = await getOrg();
+  let groupIds: number[] = [];
+  if (o.customerGroupsEnabled) {
+    const [existingGroup] = await db.select({ id: customerGroups.id }).from(customerGroups)
+      .where(and(eq(customerGroups.orgId, orgId), eq(customerGroups.name, "External Hire"))).limit(1);
+    if (existingGroup) {
+      groupIds = [existingGroup.id];
+    } else {
+      const [created] = await db.insert(customerGroups).values({ orgId, name: "External Hire", createdAt: nowISO() }).returning();
+      groupIds = [created.id];
+    }
+  }
+
+  const [created] = await db.insert(contacts).values({
+    orgId, kind: "customer", displayName: name, phone: phone || null,
+    groupId: groupIds[0] ?? null, createdAt: nowISO(),
+  }).returning();
+  if (groupIds.length > 0) {
+    await db.insert(contactGroupMemberships).values(groupIds.map((gid) => ({ orgId, contactId: created.id, groupId: gid })));
+  }
+  return created.id;
+}
+
+/** Raises a real invoice for the hire fee — deliberately NOT the deposit
+ *  (a refundable hold, not revenue). Finds-or-creates the hiring company
+ *  as a customer contact, mirrors generateInvoiceForMilestoneAction's
+ *  upsertDocumentAction({...issue:true}) shape exactly. */
+export async function generateHireInvoiceAction(hireContractId: number): Promise<{ success: true; documentId: number } | { error: string }> {
+  try {
+    await requirePerm("projects");
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const [row] = await db
+        .select({
+          id: hireContracts.id, inventoryItemId: hireContracts.inventoryItemId,
+          externalClientName: hireContracts.externalClientName, externalClientPhone: hireContracts.externalClientPhone,
+          startDate: hireContracts.startDate, endDate: hireContracts.endDate,
+          hireFeeCents: hireContracts.hireFeeCents, documentId: hireContracts.documentId,
+        })
+        .from(hireContracts).where(and(eq(hireContracts.orgId, orgId), eq(hireContracts.id, hireContractId))).limit(1);
+      if (!row) throw new Error("Hire contract not found");
+      if (row.documentId) throw new Error("This hire already has an invoice");
+      if (row.hireFeeCents <= 0) throw new Error("No hire fee set on this contract");
+
+      const [item] = await db.select({ label: inventoryItems.label, itemId: inventoryItems.itemId }).from(inventoryItems)
+        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.id, row.inventoryItemId))).limit(1);
+      const [catalogItem] = item ? await db.select({ name: items.name }).from(items).where(eq(items.id, item.itemId)).limit(1) : [];
+      const itemLabel = catalogItem ? `${catalogItem.name} — ${item!.label}` : "Hired item";
+
+      const contactId = await ensureExternalHireContact(orgId, row.externalClientName, row.externalClientPhone);
+      const o = await getOrg();
+
+      const result = await upsertDocumentAction({
+        type: "invoice",
+        contactId,
+        date: todayISO(),
+        taxInclusive: false,
+        notes: `Hire fee — ${itemLabel} (${row.startDate} to ${row.endDate})`,
+        lines: [{
+          description: `Hire fee — ${itemLabel} (${row.startDate} to ${row.endDate})`,
+          qty: 1,
+          unitPriceCents: row.hireFeeCents,
+          discountPct: 0,
+          taxClass: o.vatRegistered ? "B16" : "D_NONVAT",
+        }],
+        issue: true,
+      });
+      if (result.error || !result.id) throw new Error(result.error || "Could not create the invoice");
+
+      await db.update(hireContracts).set({ documentId: result.id }).where(eq(hireContracts.id, hireContractId));
+      await logAudit({ action: "hire_contract.invoice", module: "projects", recordId: result.id, detail: row.externalClientName });
+      revalidatePath("/projects/inventory/hire");
+      revalidatePath("/sales/invoices");
+      return { success: true, documentId: result.id };
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not generate an invoice for this hire" };
   }
 }
