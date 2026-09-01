@@ -5,6 +5,7 @@ import { db, contracts, projects, contacts, contractTypes } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
 import { withOrg, currentOrgId } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
+import { getAccess } from "@/lib/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { nowISO } from "@/lib/money";
 import { logAudit } from "@/lib/audit";
@@ -83,6 +84,8 @@ export async function getContractForPdf(id: number) {
         signedByName: contracts.signedByName,
         signatureMethod: contracts.signatureMethod,
         signaturePhotoPath: contracts.signaturePhotoPath,
+        staffSignedAt: contracts.staffSignedAt,
+        staffSignedByName: contracts.staffSignedByName,
         createdAt: contracts.createdAt,
         projectName: projects.name,
         clientName: contacts.displayName,
@@ -163,7 +166,11 @@ export async function updateContractStatusAction(id: number, status: Extract<Con
 }
 
 /** The client-signs-the-printed-copy flow: upload a photo of the wet-ink
- *  signature, record who signed, and flip status straight to "signed". */
+ *  signature. One printed page carrying both signature blocks is presumed
+ *  to represent both parties, so this alone flips status straight to
+ *  "signed" (fully executed) — also backfilling the staff/company side with
+ *  whoever's uploading it, so the PDF's two signature boxes both show real
+ *  data instead of one populated field and one blank one. */
 export async function signContractAction(params: {
   id: number;
   signedByName: string;
@@ -181,11 +188,16 @@ export async function signContractAction(params: {
       if (!params.base64Image) throw new Error("A photo of the signed contract is required");
 
       const photoPath = await uploadContractSignature(orgId, params.base64Image, params.mimeType);
+      const access = await getAccess();
 
       await db.update(contracts).set({
         signaturePhotoPath: photoPath,
         signedAt: nowISO(),
         signedByName: params.signedByName.trim(),
+        signatureMethod: "wet_ink",
+        staffSignedAt: nowISO(),
+        staffSignedByName: access?.memberName || "Staff",
+        staffSignedByMemberId: access?.memberId ?? null,
         status: "signed",
       }).where(eq(contracts.id, params.id));
 
@@ -195,6 +207,42 @@ export async function signContractAction(params: {
     });
   } catch (err: any) {
     return { error: err?.message || "Could not record the signature" };
+  }
+}
+
+/** The staff/company countersignature — a second, independent typed-name
+ *  signature from the client's own. Whichever side signs second is what
+ *  actually flips status to "signed" (fully executed); the other stays
+ *  wherever it already was, so signing order doesn't matter. */
+export async function staffSignContractAction(id: number, typedName: string): Promise<{ success: true } | { error: string }> {
+  try {
+    await requirePerm("contracts");
+    return await withOrg(async () => {
+      const orgId = currentOrgId();
+      const [row] = await db.select().from(contracts)
+        .where(and(eq(contracts.orgId, orgId), eq(contracts.id, id))).limit(1);
+      if (!row) throw new Error("Contract not found");
+      if (["draft", "declined", "expired"].includes(row.status)) throw new Error("This contract isn't ready to be countersigned");
+      if (row.staffSignedAt) throw new Error("Already countersigned");
+      const clean = typedName?.trim();
+      if (!clean) throw new Error("Type your name to sign");
+
+      const access = await getAccess();
+      const fullySigned = !!row.signedAt;
+
+      await db.update(contracts).set({
+        staffSignedAt: nowISO(),
+        staffSignedByName: clean,
+        staffSignedByMemberId: access?.memberId ?? null,
+        ...(fullySigned ? { status: "signed" } : {}),
+      }).where(eq(contracts.id, id));
+
+      await logAudit({ action: "contract.countersign", module: "projects", recordId: id, detail: clean, projectId: row.projectId });
+      revalidatePath(`/projects/${row.projectId}`);
+      return { success: true };
+    });
+  } catch (err: any) {
+    return { error: err?.message || "Could not record the countersignature" };
   }
 }
 

@@ -1460,10 +1460,17 @@ export const contracts = pgTable("contracts", {
   signedAt: text("signed_at"),
   signedByName: text("signed_by_name"),
   // wet_ink | portal_click — null on rows predating this column (implicitly
-  // wet_ink if signedAt is set). signedAt/signedByName stay the single
-  // source of truth for "when/who" regardless of which method was used.
+  // wet_ink if signedAt is set). signedAt/signedByName are the CLIENT's
+  // signature specifically now — see staffSigned* below for the company side.
   signatureMethod: text("signature_method"),
   portalAcceptedIp: text("portal_accepted_ip"), // best-effort audit trail, portal_click only
+  // The company/planner's own countersignature — a second, independent
+  // signature from the client's. `status` only reaches "signed" (fully
+  // executed) once both this and signedAt are set, or a wet-ink photo is
+  // uploaded (that single printed page is presumed to carry both).
+  staffSignedAt: text("staff_signed_at"),
+  staffSignedByName: text("staff_signed_by_name"),
+  staffSignedByMemberId: integer("staff_signed_by_member_id"),
   contractTypeId: integer("contract_type_id").references(() => contractTypes.id),
   paymentTerms: text("payment_terms"), // separate from `content`, same free-text/merge-field treatment
   createdAt: text("created_at").notNull(),

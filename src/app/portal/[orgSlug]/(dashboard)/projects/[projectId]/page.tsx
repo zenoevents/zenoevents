@@ -191,11 +191,21 @@ export default async function ClientPortalProjectDetail({
                       <a href={`/portal/${orgSlug}/api/pdf/contract/${c.id}`} target="_blank" rel="noreferrer" className="text-[11.5px] text-[var(--color-brand)] font-medium hover:underline mt-1 inline-block">
                         View PDF
                       </a>
-                      {(c.status === "draft" || c.status === "sent") && (
+                      {(c.status === "draft" || c.status === "sent") && !c.signedAt && (
                         <ContractAcceptButtons orgSlug={orgSlug} contractId={c.id} suggestedName={clientContact?.displayName ?? ""} />
                       )}
-                      {c.status === "signed" && c.signedAt && (
-                        <div className="text-[11px] text-emerald-700 mt-1.5">Signed {c.signedAt.slice(0, 10)}{c.signedByName ? ` by ${c.signedByName}` : ""}</div>
+                      {c.signedAt && (
+                        <div className="text-[11px] text-emerald-700 mt-1.5">
+                          You signed {c.signedAt.slice(0, 10)}{c.signedByName ? ` as ${c.signedByName}` : ""}
+                        </div>
+                      )}
+                      {c.signedAt && !c.staffSignedAt && c.status !== "signed" && (
+                        <div className="text-[11px] text-amber-600 mt-0.5">Awaiting the company's countersignature</div>
+                      )}
+                      {c.staffSignedAt && (
+                        <div className="text-[11px] text-emerald-700 mt-0.5">
+                          Countersigned by {session.org.name} {c.staffSignedAt.slice(0, 10)}
+                        </div>
                       )}
                     </div>
                   ))}

@@ -1267,3 +1267,9 @@ FROM org o
 JOIN contract_types ct ON ct.org_id = o.id AND ct.name = 'General'
 WHERE o.contract_template IS NOT NULL AND TRIM(o.contract_template) != ''
   AND NOT EXISTS (SELECT 1 FROM contract_templates t WHERE t.org_id = o.id AND t.contract_type_id = ct.id AND t.name = 'Default');
+
+-- Dual-party contract signing: the company/planner's own countersignature,
+-- independent of the client's (signed_at/signed_by_name).
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS staff_signed_at TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS staff_signed_by_name TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS staff_signed_by_member_id INTEGER;

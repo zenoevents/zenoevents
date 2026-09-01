@@ -57,6 +57,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orgSlug: st
       signedByName: contract.signedByName,
       signatureMethod: contract.signatureMethod,
       signaturePhotoUrl,
+      staffSignedAt: contract.staffSignedAt,
+      staffSignedByName: contract.staffSignedByName,
     },
   });
 

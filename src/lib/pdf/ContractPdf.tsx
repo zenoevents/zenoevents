@@ -33,6 +33,11 @@ export interface PdfContractData {
    *  the caller (route handler) before render, since ContractPdf itself has
    *  no storage access. Only present when signatureMethod is wet_ink. */
   signaturePhotoUrl: string | null;
+  /** The company/planner's own countersignature — independent of the
+   *  client's above. Also backfilled on a wet-ink upload (see contracts.ts),
+   *  since that single printed page is presumed to carry both. */
+  staffSignedAt: string | null;
+  staffSignedByName: string | null;
 }
 
 function makeStyles(brand: string) {
@@ -52,11 +57,13 @@ function makeStyles(brand: string) {
 
     body: { lineHeight: 1.5 },
 
-    signatureBox: { marginTop: 8, borderWidth: 1, borderColor: "#e8e8ed", borderRadius: 4, padding: 12 },
+    signatureRow: { flexDirection: "row", gap: 12 },
+    signatureBox: { marginTop: 8, borderWidth: 1, borderColor: "#e8e8ed", borderRadius: 4, padding: 12, flex: 1 },
+    signatureBoxLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#6e6e73", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 },
     signed: { color: "#1f8a4c", fontFamily: "Helvetica-Bold" },
     unsigned: { color: "#86868b" },
-    signatureName: { fontSize: 22, fontFamily: "Times-Italic", marginTop: 6, marginBottom: 2 },
-    signaturePhoto: { maxWidth: 220, maxHeight: 100, marginTop: 6, marginBottom: 2, objectFit: "contain" },
+    signatureName: { fontSize: 20, fontFamily: "Times-Italic", marginTop: 6, marginBottom: 2 },
+    signaturePhoto: { maxWidth: 320, maxHeight: 140, marginTop: 6, marginBottom: 2, objectFit: "contain" },
     signatureMeta: { fontSize: 9, color: "#6e6e73", marginTop: 2 },
 
     footer: { position: "absolute", bottom: 48, left: 48, right: 48, fontSize: 8, color: "#86868b", textAlign: "center" },
@@ -129,25 +136,48 @@ export function ContractPdf({ data }: { data: PdfContractData }) {
         )}
 
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Signature</Text>
-          <View style={s.signatureBox}>
-            {data.status === "signed" ? (
-              <>
-                <Text style={s.signed}>Signed</Text>
-                {data.signaturePhotoUrl ? (
-                  <Image src={data.signaturePhotoUrl} style={s.signaturePhoto} />
-                ) : (
-                  <Text style={s.signatureName}>{data.signedByName}</Text>
-                )}
+          <Text style={s.sectionTitle}>Signatures</Text>
+          {data.signaturePhotoUrl ? (
+            <View style={s.signatureBox}>
+              <Text style={s.signed}>Signed — wet-ink copy on file</Text>
+              <Image src={data.signaturePhotoUrl} style={s.signaturePhoto} />
+              <Text style={s.signatureMeta}>
+                Client: {data.signedByName}{data.signedAt ? ` · ${formatSignedAt(data.signedAt)}` : ""}
+              </Text>
+              {data.staffSignedByName && (
                 <Text style={s.signatureMeta}>
-                  {data.signedByName}{data.signedAt ? ` · ${formatSignedAt(data.signedAt)}` : ""}
-                  {data.signatureMethod === "portal_click" ? " · Signed electronically via client portal" : data.signaturePhotoUrl ? " · Signed copy uploaded by staff" : ""}
+                  On behalf of {data.orgName}: {data.staffSignedByName}{data.staffSignedAt ? ` · ${formatSignedAt(data.staffSignedAt)}` : ""}
                 </Text>
-              </>
-            ) : (
-              <Text style={s.unsigned}>Not yet signed</Text>
-            )}
-          </View>
+              )}
+            </View>
+          ) : (
+            <View style={s.signatureRow}>
+              <View style={s.signatureBox}>
+                <Text style={s.signatureBoxLabel}>Client</Text>
+                {data.signedAt ? (
+                  <>
+                    <Text style={s.signed}>Signed</Text>
+                    <Text style={s.signatureName}>{data.signedByName}</Text>
+                    <Text style={s.signatureMeta}>{formatSignedAt(data.signedAt)}</Text>
+                  </>
+                ) : (
+                  <Text style={s.unsigned}>Awaiting signature</Text>
+                )}
+              </View>
+              <View style={s.signatureBox}>
+                <Text style={s.signatureBoxLabel}>On behalf of {data.orgName}</Text>
+                {data.staffSignedAt ? (
+                  <>
+                    <Text style={s.signed}>Signed</Text>
+                    <Text style={s.signatureName}>{data.staffSignedByName}</Text>
+                    <Text style={s.signatureMeta}>{formatSignedAt(data.staffSignedAt)}</Text>
+                  </>
+                ) : (
+                  <Text style={s.unsigned}>Awaiting signature</Text>
+                )}
+              </View>
+            </View>
+          )}
         </View>
 
         <Text style={s.footer}>Contract #{data.id} · Generated on {new Date().toLocaleDateString()}</Text>

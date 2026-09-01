@@ -36,6 +36,7 @@ async function guardAcceptableContract(orgSlug: string, contractId: number) {
   const contract = await getClientContractForAccept(session.orgId, session.contactId, contractId);
   if (!contract) throw new Error("Contract not found");
   if (!["draft", "sent"].includes(contract.status)) throw new Error("This contract has already been responded to");
+  if (contract.signedAt) throw new Error("You've already signed this contract");
   return { session, contract };
 }
 
@@ -55,21 +56,26 @@ export async function portalAcceptContractAction(orgSlug: string, contractId: nu
 
 /** Step 2: the actual virtual signature — the client types their full name
  *  to sign, same real-world weight as a typed e-signature elsewhere. This is
- *  what actually flips status to "signed", visible to staff immediately
- *  since it's the same `contracts` row ContractsPanel already reads. */
+ *  the CLIENT's signature specifically — a separate, independent one from
+ *  the company/planner's own countersignature (staffSignContractAction on
+ *  the staff side). Only flips status to "signed" (fully executed) if staff
+ *  already countersigned; otherwise the contract just records the client's
+ *  side and waits, visible to staff immediately either way since it's the
+ *  same `contracts` row ContractsPanel already reads. */
 export async function portalSignContractAction(orgSlug: string, contractId: number, typedName: string): Promise<{ success: true } | { error: string }> {
   try {
     const { contract } = await guardAcceptableContract(orgSlug, contractId);
     const clean = typedName.trim();
     if (!clean) throw new Error("Type your full name to sign");
     const ip = await clientIpFromHeaders();
+    const fullySigned = !!contract.staffSignedAt;
 
     await db.update(contracts).set({
-      status: "signed",
       signedAt: nowISO(),
       signedByName: clean,
       signatureMethod: "portal_click",
       portalAcceptedIp: ip,
+      ...(fullySigned ? { status: "signed" } : {}),
     }).where(eq(contracts.id, contract.id));
 
     revalidatePath(`/portal/${orgSlug}/projects/${contract.projectId}`);

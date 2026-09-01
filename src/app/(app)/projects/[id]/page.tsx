@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePerm } from "@/lib/guard";
+import { getAccess } from "@/lib/access";
 import { getOrg } from "@/lib/org";
 import { getProject, projectFinancials, projectDocuments, getProjectMilestones, getProjectOverviewStats } from "@/lib/projects";
 import { listInventoryInstances, listReservationsForProject } from "@/lib/inventory-instances";
@@ -119,7 +120,7 @@ export default async function ProjectDetailPage({
   await requirePerm("projects");
   const { id } = await params;
   const projectId = Number(id);
-  const [project, org] = await Promise.all([getProject(projectId), getOrg()]);
+  const [project, org, access] = await Promise.all([getProject(projectId), getOrg(), getAccess()]);
   if (!project) notFound();
 
   const { tab: tabParam } = await searchParams;
@@ -422,6 +423,7 @@ export default async function ProjectDetailPage({
               budgetCents: project.budgetCents,
             }}
             orgName={org.name}
+            currentStaffName={access?.memberName || ""}
           />
         )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createContractAction, updateContractStatusAction, signContractAction, deleteContractAction } from "@/lib/contracts";
+import { createContractAction, updateContractStatusAction, signContractAction, staffSignContractAction, deleteContractAction } from "@/lib/contracts";
 import { CONTRACT_STATUS_LABELS, type ContractStatus } from "@/lib/contract-status";
 import { fmtKES } from "@/lib/money";
 import { PhotoCapture } from "@/components/PhotoCapture";
@@ -16,6 +16,8 @@ type ContractRow = {
   status: string;
   signedAt: string | null;
   signedByName: string | null;
+  staffSignedAt?: string | null;
+  staffSignedByName?: string | null;
   contractTypeId?: number | null;
 };
 
@@ -81,7 +83,54 @@ function SignRow({ contract, onDone }: { contract: ContractRow; onDone: () => vo
   );
 }
 
-function ContractCard({ contract, contractTypes, onChanged }: { contract: ContractRow; contractTypes: ContractTypeOption[]; onChanged: () => void }) {
+/** The company/planner's own countersignature — independent of the
+ *  client's (SignRow above signs on the client's behalf via wet-ink; a
+ *  client who signs themselves via the portal doesn't touch this at all).
+ *  Same typed-name pattern as the portal's own sign flow. */
+function CountersignRow({ contract, currentStaffName, onDone }: { contract: ContractRow; currentStaffName: string; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [typedName, setTypedName] = useState(currentStaffName);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setError(null);
+    if (!typedName.trim()) { setError("Type your name to sign"); return; }
+    setPending(true);
+    try {
+      const result = await staffSignContractAction(contract.id, typedName);
+      if ("error" in result) { setError(result.error); return; }
+      onDone();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (!open) {
+    return <button onClick={() => setOpen(true)} className="text-[12px] font-medium text-[var(--color-accent-600)] hover:underline">Countersign on behalf of the company</button>;
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-dashed border-[var(--color-ink-200)] p-3 space-y-2 w-full">
+      <input
+        value={typedName}
+        onChange={(e) => setTypedName(e.target.value)}
+        placeholder="Your full name"
+        className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[15px] italic outline-none focus:border-[var(--color-accent-500)]"
+        style={{ fontFamily: "cursive" }}
+      />
+      {error && <div className="text-[11.5px] text-[var(--color-bad)]">{error}</div>}
+      <div className="flex gap-3">
+        <button disabled={pending} onClick={submit} className="text-[12px] font-medium text-white bg-[var(--color-accent-500)] rounded-lg px-3 py-1.5 disabled:opacity-50">
+          {pending ? "Saving…" : "Sign & Confirm"}
+        </button>
+        <button onClick={() => setOpen(false)} className="text-[12px] text-[var(--color-ink-400)] hover:underline">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ContractCard({ contract, contractTypes, currentStaffName, onChanged }: { contract: ContractRow; contractTypes: ContractTypeOption[]; currentStaffName: string; onChanged: () => void }) {
   const [pending, setPending] = useState(false);
   const typeName = contractTypes.find((t) => t.id === contract.contractTypeId)?.name;
 
@@ -112,8 +161,15 @@ function ContractCard({ contract, contractTypes, onChanged }: { contract: Contra
           <div className="font-medium text-[13.5px]">{contract.subject}</div>
           <div className="text-[11.5px] text-[var(--color-ink-400)] mt-0.5">
             {contract.startDate}{contract.endDate ? ` → ${contract.endDate}` : ""}
-            {contract.status === "signed" && contract.signedByName && ` · Signed by ${contract.signedByName} on ${(contract.signedAt || "").slice(0, 10)}`}
+            {contract.signedByName && ` · Client signed by ${contract.signedByName} on ${(contract.signedAt || "").slice(0, 10)}`}
+            {contract.staffSignedByName && ` · Countersigned by ${contract.staffSignedByName} on ${(contract.staffSignedAt || "").slice(0, 10)}`}
           </div>
+          {contract.status !== "draft" && contract.status !== "declined" && contract.status !== "expired" && contract.status !== "signed" && (contract.signedAt || contract.staffSignedAt) && (
+            <div className="text-[11.5px] text-amber-600 font-medium mt-0.5">
+              {contract.signedAt && !contract.staffSignedAt && "Awaiting your countersignature"}
+              {!contract.signedAt && contract.staffSignedAt && "Awaiting the client's signature"}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {typeName && (
@@ -146,6 +202,9 @@ function ContractCard({ contract, contractTypes, onChanged }: { contract: Contra
             <SignRow contract={contract} onDone={onChanged} />
             <button disabled={pending} onClick={() => setStatus("declined")} className="text-[12px] text-[var(--color-bad)] hover:underline disabled:opacity-50">Mark Declined</button>
           </>
+        )}
+        {contract.status !== "draft" && contract.status !== "declined" && contract.status !== "expired" && contract.status !== "signed" && !contract.staffSignedAt && (
+          <CountersignRow contract={contract} currentStaffName={currentStaffName} onDone={onChanged} />
         )}
         {contract.status === "signed" && (
           <button disabled={pending} onClick={() => setStatus("expired")} className="text-[12px] text-[var(--color-ink-400)] hover:underline disabled:opacity-50">Mark Expired</button>
@@ -186,6 +245,7 @@ export function ContractsPanel({
   contractTemplates,
   project,
   orgName,
+  currentStaffName,
 }: {
   projectId: number;
   contracts: ContractRow[];
@@ -193,6 +253,7 @@ export function ContractsPanel({
   contractTemplates: ContractTemplateOption[];
   project: ProjectInfo;
   orgName: string;
+  currentStaffName: string;
 }) {
   const [showNew, setShowNew] = useState(false);
   const [subject, setSubject] = useState("");
@@ -261,7 +322,7 @@ export function ContractsPanel({
         />
       ) : (
         <div className="space-y-2">
-          {contracts.map((c) => <ContractCard key={c.id} contract={c} contractTypes={contractTypes} onChanged={refresh} />)}
+          {contracts.map((c) => <ContractCard key={c.id} contract={c} contractTypes={contractTypes} currentStaffName={currentStaffName} onChanged={refresh} />)}
         </div>
       )}
 
