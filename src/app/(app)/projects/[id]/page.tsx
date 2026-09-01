@@ -7,6 +7,7 @@ import { listInventoryInstances, listReservationsForProject } from "@/lib/invent
 import { listPaymentSchedule } from "@/lib/payment-schedule";
 import { listDamageReportsForProject } from "@/lib/damage-reports";
 import { listContractsForProject } from "@/lib/contracts";
+import { listContractTypes, listContractTemplates } from "@/lib/contract-templates";
 import { listProjectFiles } from "@/lib/project-files";
 import { listProjectTasks, listActiveStaff } from "@/lib/project-tasks";
 import { listProjectNotes } from "@/lib/project-notes";
@@ -124,7 +125,7 @@ export default async function ProjectDetailPage({
   const { tab: tabParam } = await searchParams;
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "overview";
 
-  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts, files, tasks, staff, timelineEvents, auditRows, overviewStats, notes] = await Promise.all([
+  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts, files, tasks, staff, timelineEvents, auditRows, overviewStats, notes, contractTypes, contractTemplates] = await Promise.all([
     projectFinancials(projectId),
     projectDocuments(projectId),
     listInventoryInstances(),
@@ -139,6 +140,8 @@ export default async function ProjectDetailPage({
     listProjectAuditLog(projectId),
     getProjectOverviewStats(projectId),
     listProjectNotes(projectId),
+    listContractTypes(),
+    listContractTemplates(),
   ]);
 
   const mostRecentDamage = damageReports[0] ?? null;
@@ -408,7 +411,8 @@ export default async function ProjectDetailPage({
           <ContractsPanel
             projectId={project.id}
             contracts={contracts}
-            contractTemplate={org.contractTemplate}
+            contractTypes={contractTypes}
+            contractTemplates={contractTemplates}
             project={{
               name: project.name,
               clientName: project.clientName,

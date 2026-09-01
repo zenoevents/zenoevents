@@ -1,7 +1,7 @@
 "use server";
 
 import crypto from "crypto";
-import { db, contracts, projects, contacts } from "@/db";
+import { db, contracts, projects, contacts, contractTypes } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
 import { withOrg, currentOrgId } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
@@ -78,17 +78,22 @@ export async function getContractForPdf(id: number) {
         endDate: contracts.endDate,
         status: contracts.status,
         content: contracts.content,
+        paymentTerms: contracts.paymentTerms,
         signedAt: contracts.signedAt,
         signedByName: contracts.signedByName,
+        signatureMethod: contracts.signatureMethod,
+        signaturePhotoPath: contracts.signaturePhotoPath,
         createdAt: contracts.createdAt,
         projectName: projects.name,
         clientName: contacts.displayName,
         clientPhone: contacts.phone,
         clientEmail: contacts.email,
+        contractTypeName: contractTypes.name,
       })
       .from(contracts)
       .innerJoin(projects, eq(projects.id, contracts.projectId))
       .leftJoin(contacts, eq(contacts.id, projects.contactId))
+      .leftJoin(contractTypes, eq(contractTypes.id, contracts.contractTypeId))
       .where(and(eq(contracts.orgId, orgId), eq(contracts.id, id)))
       .limit(1);
     return row ?? null;
@@ -109,6 +114,9 @@ export async function createContractAction(projectId: number, formData: FormData
       const endDate = (formData.get("endDate") as string) || null;
       const valueCents = Math.round(parseFloat((formData.get("value") as string) || "0") * 100);
       const content = (formData.get("content") as string) || null;
+      const paymentTerms = (formData.get("paymentTerms") as string) || null;
+      const contractTypeIdRaw = formData.get("contractTypeId") as string;
+      const contractTypeId = contractTypeIdRaw ? Number(contractTypeIdRaw) : null;
 
       if (!subject || !startDate) throw new Error("Subject and start date are required");
 
@@ -120,6 +128,8 @@ export async function createContractAction(projectId: number, formData: FormData
         startDate,
         endDate,
         content,
+        paymentTerms,
+        contractTypeId,
         status: "draft",
         createdAt: nowISO(),
       }).returning({ id: contracts.id });

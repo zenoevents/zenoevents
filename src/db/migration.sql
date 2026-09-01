@@ -1228,3 +1228,42 @@ CREATE TABLE IF NOT EXISTS project_notes (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_project_notes_org_project ON project_notes(org_id, project_id);
+
+-- Contract Templates overhaul: admin-managed types + reusable templates,
+-- separate Payment Terms field, replacing the old single org.contract_template.
+CREATE TABLE IF NOT EXISTS contract_types (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contract_types_org_name ON contract_types(org_id, name);
+
+CREATE TABLE IF NOT EXISTS contract_templates (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  contract_type_id INTEGER NOT NULL REFERENCES contract_types(id),
+  name TEXT NOT NULL,
+  content TEXT,
+  payment_terms TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contract_templates_org_type ON contract_templates(org_id, contract_type_id);
+
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS contract_type_id INTEGER REFERENCES contract_types(id);
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS payment_terms TEXT;
+
+-- Backfill: an org with pre-existing free-text contractTemplate wording gets
+-- a "General"/"Default" type+template carrying it forward, so nothing's lost.
+INSERT INTO contract_types (org_id, name, created_at)
+SELECT id, 'General', NOW()::TEXT
+FROM org
+WHERE contract_template IS NOT NULL AND TRIM(contract_template) != ''
+  AND NOT EXISTS (SELECT 1 FROM contract_types ct WHERE ct.org_id = org.id AND ct.name = 'General');
+
+INSERT INTO contract_templates (org_id, contract_type_id, name, content, created_at)
+SELECT o.id, ct.id, 'Default', o.contract_template, NOW()::TEXT
+FROM org o
+JOIN contract_types ct ON ct.org_id = o.id AND ct.name = 'General'
+WHERE o.contract_template IS NOT NULL AND TRIM(o.contract_template) != ''
+  AND NOT EXISTS (SELECT 1 FROM contract_templates t WHERE t.org_id = o.id AND t.contract_type_id = ct.id AND t.name = 'Default');

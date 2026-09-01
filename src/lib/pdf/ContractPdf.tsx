@@ -1,6 +1,14 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { fmtKES } from "@/lib/money";
+
+/** Full date + time, not just the day — "signed on Sep 1" isn't enough of
+ *  a record; the exact moment matters for a signed contract. */
+function formatSignedAt(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-KE", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 export interface PdfContractData {
   orgName: string;
@@ -15,9 +23,16 @@ export interface PdfContractData {
   startDate: string;
   endDate: string | null;
   content: string | null;
+  paymentTerms: string | null;
+  contractTypeName: string | null;
   status: string;
   signedAt: string | null;
   signedByName: string | null;
+  signatureMethod: string | null;
+  /** Signed, time-limited URL to the uploaded wet-ink photo — resolved by
+   *  the caller (route handler) before render, since ContractPdf itself has
+   *  no storage access. Only present when signatureMethod is wet_ink. */
+  signaturePhotoUrl: string | null;
 }
 
 function makeStyles(brand: string) {
@@ -40,6 +55,9 @@ function makeStyles(brand: string) {
     signatureBox: { marginTop: 8, borderWidth: 1, borderColor: "#e8e8ed", borderRadius: 4, padding: 12 },
     signed: { color: "#1f8a4c", fontFamily: "Helvetica-Bold" },
     unsigned: { color: "#86868b" },
+    signatureName: { fontSize: 22, fontFamily: "Times-Italic", marginTop: 6, marginBottom: 2 },
+    signaturePhoto: { maxWidth: 220, maxHeight: 100, marginTop: 6, marginBottom: 2, objectFit: "contain" },
+    signatureMeta: { fontSize: 9, color: "#6e6e73", marginTop: 2 },
 
     footer: { position: "absolute", bottom: 48, left: 48, right: 48, fontSize: 8, color: "#86868b", textAlign: "center" },
   });
@@ -71,6 +89,12 @@ export function ContractPdf({ data }: { data: PdfContractData }) {
               <Text style={s.label}>Contract Value:</Text>
               <Text style={s.value}>{fmtKES(data.valueCents)}</Text>
             </View>
+            {data.contractTypeName && (
+              <View style={s.gridItem}>
+                <Text style={s.label}>Contract Type:</Text>
+                <Text style={s.value}>{data.contractTypeName}</Text>
+              </View>
+            )}
             <View style={s.gridItem}>
               <Text style={s.label}>Start Date:</Text>
               <Text style={s.value}>{data.startDate}</Text>
@@ -97,13 +121,28 @@ export function ContractPdf({ data }: { data: PdfContractData }) {
           </View>
         )}
 
+        {data.paymentTerms && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Payment Terms</Text>
+            <Text style={s.body}>{data.paymentTerms}</Text>
+          </View>
+        )}
+
         <View style={s.section}>
           <Text style={s.sectionTitle}>Signature</Text>
           <View style={s.signatureBox}>
             {data.status === "signed" ? (
               <>
                 <Text style={s.signed}>Signed</Text>
-                <Text style={{ marginTop: 4 }}>By {data.signedByName} on {(data.signedAt || "").slice(0, 10)}</Text>
+                {data.signaturePhotoUrl ? (
+                  <Image src={data.signaturePhotoUrl} style={s.signaturePhoto} />
+                ) : (
+                  <Text style={s.signatureName}>{data.signedByName}</Text>
+                )}
+                <Text style={s.signatureMeta}>
+                  {data.signedByName}{data.signedAt ? ` · ${formatSignedAt(data.signedAt)}` : ""}
+                  {data.signatureMethod === "portal_click" ? " · Signed electronically via client portal" : data.signaturePhotoUrl ? " · Signed copy uploaded by staff" : ""}
+                </Text>
               </>
             ) : (
               <Text style={s.unsigned}>Not yet signed</Text>

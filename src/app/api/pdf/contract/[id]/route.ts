@@ -6,6 +6,7 @@ import { requirePerm } from "@/lib/guard";
 import { getContractForPdf } from "@/lib/contracts";
 import { ContractPdf } from "@/lib/pdf/ContractPdf";
 import { contentDisposition } from "@/lib/pdf-filename";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const contract = await getContractForPdf(Number(id));
   if (!contract) return new Response("Not found", { status: 404 });
 
+  let signaturePhotoUrl: string | null = null;
+  if (contract.signaturePhotoPath) {
+    const supabase = createAdminClient();
+    const { data } = await supabase.storage.from("contracts").createSignedUrl(contract.signaturePhotoPath, 300);
+    signaturePhotoUrl = data?.signedUrl ?? null;
+  }
+
   const element = React.createElement(ContractPdf, {
     data: {
       orgName: o.name,
@@ -36,9 +44,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       startDate: contract.startDate,
       endDate: contract.endDate,
       content: contract.content,
+      paymentTerms: contract.paymentTerms,
+      contractTypeName: contract.contractTypeName,
       status: contract.status,
       signedAt: contract.signedAt,
       signedByName: contract.signedByName,
+      signatureMethod: contract.signatureMethod,
+      signaturePhotoUrl,
     },
   });
 

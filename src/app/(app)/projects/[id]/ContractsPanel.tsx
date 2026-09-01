@@ -16,6 +16,16 @@ type ContractRow = {
   status: string;
   signedAt: string | null;
   signedByName: string | null;
+  contractTypeId?: number | null;
+};
+
+export type ContractTypeOption = { id: number; name: string };
+export type ContractTemplateOption = {
+  id: number;
+  contractTypeId: number;
+  name: string;
+  content: string | null;
+  paymentTerms: string | null;
 };
 
 const statusStyles: Record<string, string> = {
@@ -71,8 +81,9 @@ function SignRow({ contract, onDone }: { contract: ContractRow; onDone: () => vo
   );
 }
 
-function ContractCard({ contract, onChanged }: { contract: ContractRow; onChanged: () => void }) {
+function ContractCard({ contract, contractTypes, onChanged }: { contract: ContractRow; contractTypes: ContractTypeOption[]; onChanged: () => void }) {
   const [pending, setPending] = useState(false);
+  const typeName = contractTypes.find((t) => t.id === contract.contractTypeId)?.name;
 
   async function setStatus(status: Extract<ContractStatus, "sent" | "declined" | "expired">) {
     setPending(true);
@@ -105,6 +116,11 @@ function ContractCard({ contract, onChanged }: { contract: ContractRow; onChange
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {typeName && (
+            <span className="inline-block rounded-full bg-[var(--color-ink-50)] border border-[var(--color-ink-200)] px-2.5 py-1 text-[11px] text-[var(--color-ink-600)]">
+              {typeName}
+            </span>
+          )}
           <span className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyles[contract.status] ?? statusStyles.draft}`}>
             {CONTRACT_STATUS_LABELS[contract.status as ContractStatus] ?? contract.status}
           </span>
@@ -166,13 +182,15 @@ function interpolateTemplate(template: string, project: ProjectInfo, orgName: st
 export function ContractsPanel({
   projectId,
   contracts,
-  contractTemplate,
+  contractTypes,
+  contractTemplates,
   project,
   orgName,
 }: {
   projectId: number;
   contracts: ContractRow[];
-  contractTemplate?: string | null;
+  contractTypes: ContractTypeOption[];
+  contractTemplates: ContractTemplateOption[];
   project: ProjectInfo;
   orgName: string;
 }) {
@@ -182,6 +200,9 @@ export function ContractsPanel({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [content, setContent] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("");
+  const [templateId, setTemplateId] = useState("");
+  const [contractTypeId, setContractTypeId] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -191,9 +212,22 @@ export function ContractsPanel({
 
   function openNew() {
     setSubject(`${project.name} — Service Agreement`);
-    if (contractTemplate) setContent(interpolateTemplate(contractTemplate, project, orgName));
+    setContent("");
+    setPaymentTerms("");
+    setTemplateId("");
+    setContractTypeId("");
     if (project.budgetCents) setValue((project.budgetCents / 100).toFixed(2));
     setShowNew(true);
+  }
+
+  function pickTemplate(id: string) {
+    setTemplateId(id);
+    if (!id) return;
+    const t = contractTemplates.find((t) => String(t.id) === id);
+    if (!t) return;
+    setContractTypeId(String(t.contractTypeId));
+    setContent(t.content ? interpolateTemplate(t.content, project, orgName) : "");
+    setPaymentTerms(t.paymentTerms ? interpolateTemplate(t.paymentTerms, project, orgName) : "");
   }
 
   async function submit() {
@@ -207,6 +241,8 @@ export function ContractsPanel({
       formData.set("startDate", startDate);
       formData.set("endDate", endDate);
       formData.set("content", content);
+      formData.set("paymentTerms", paymentTerms);
+      if (contractTypeId) formData.set("contractTypeId", contractTypeId);
       const result = await createContractAction(projectId, formData);
       if ("error" in result) { setError(result.error); return; }
       refresh();
@@ -225,7 +261,7 @@ export function ContractsPanel({
         />
       ) : (
         <div className="space-y-2">
-          {contracts.map((c) => <ContractCard key={c.id} contract={c} onChanged={refresh} />)}
+          {contracts.map((c) => <ContractCard key={c.id} contract={c} contractTypes={contractTypes} onChanged={refresh} />)}
         </div>
       )}
 
@@ -235,13 +271,39 @@ export function ContractsPanel({
 
       {showNew && (
         <div className="rounded-lg border border-dashed border-[var(--color-ink-200)] p-4 space-y-2.5">
+          {contractTemplates.length > 0 && (
+            <select
+              value={templateId}
+              onChange={(e) => pickTemplate(e.target.value)}
+              className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
+            >
+              <option value="">Blank — no template</option>
+              {contractTypes.map((t) => {
+                const opts = contractTemplates.filter((tpl) => tpl.contractTypeId === t.id);
+                if (opts.length === 0) return null;
+                return (
+                  <optgroup key={t.id} label={t.name}>
+                    {opts.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
+                  </optgroup>
+                );
+              })}
+            </select>
+          )}
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="Subject — e.g. Wedding Décor & Rental Agreement"
             className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
           />
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
+            <select
+              value={contractTypeId}
+              onChange={(e) => setContractTypeId(e.target.value)}
+              className="rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
+            >
+              <option value="">No type</option>
+              {contractTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
             <input
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -266,7 +328,14 @@ export function ContractsPanel({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={4}
-            placeholder="Terms (optional)"
+            placeholder="Terms / content (optional)"
+            className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
+          />
+          <textarea
+            value={paymentTerms}
+            onChange={(e) => setPaymentTerms(e.target.value)}
+            rows={3}
+            placeholder="Payment terms (optional)"
             className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
           />
           {error && <div className="text-[12px] text-[var(--color-bad)]">{error}</div>}

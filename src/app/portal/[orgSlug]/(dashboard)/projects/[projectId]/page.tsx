@@ -1,4 +1,6 @@
 import { getClientSession } from "@/lib/client-portal/auth";
+import { db, contacts } from "@/db";
+import { eq } from "drizzle-orm";
 import {
   getClientProject,
   getClientPaymentSchedule,
@@ -36,12 +38,14 @@ export default async function ClientPortalProjectDetail({
   const project = await getClientProject(session.orgId, session.contactId, projectId);
   if (!project) notFound();
 
-  const [schedule, docs, contracts, timeline, notes] = await Promise.all([
+  const [schedule, docs, contracts, timeline, notes, [clientContact]] = await Promise.all([
     getClientPaymentSchedule(session.orgId, projectId),
     getClientProjectDocuments(session.orgId, session.contactId, projectId),
     getClientProjectContracts(session.orgId, projectId),
     getClientProjectTimeline(session.orgId, projectId),
     getClientProjectNotes(session.orgId, projectId),
+    db.select({ displayName: contacts.displayName }).from(contacts)
+      .where(eq(contacts.id, session.contactId)).limit(1),
   ]);
 
   const realInvoices = docs.filter((d) => d.type === "invoice" && d.status !== "draft" && d.status !== "void");
@@ -184,7 +188,7 @@ export default async function ClientPortalProjectDetail({
                         View PDF
                       </a>
                       {(c.status === "draft" || c.status === "sent") && (
-                        <ContractAcceptButtons orgSlug={orgSlug} contractId={c.id} />
+                        <ContractAcceptButtons orgSlug={orgSlug} contractId={c.id} suggestedName={clientContact?.displayName ?? ""} />
                       )}
                       {c.status === "signed" && c.signedAt && (
                         <div className="text-[11px] text-emerald-700 mt-1.5">Signed {c.signedAt.slice(0, 10)}{c.signedByName ? ` by ${c.signedByName}` : ""}</div>

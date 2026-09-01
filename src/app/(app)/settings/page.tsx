@@ -51,7 +51,6 @@ export default async function SettingsPage() {
           documentFooterText: o.documentFooterText,
           paymentInfoText: o.paymentInfoText,
           termsText: o.termsText,
-          contractTemplate: o.contractTemplate,
           dataSegregation: o.dataSegregation,
           requireBillApproval: o.requireBillApproval,
           accountantApprovalLimitCents: o.accountantApprovalLimitCents,
@@ -114,6 +113,13 @@ export default async function SettingsPage() {
         <Link href="/settings/leads" className="block w-full">
           <div className="font-semibold text-[var(--color-ink-900)]">Lead Capture Channels</div>
           <p className="text-[12.5px] text-[var(--color-ink-600)] mt-1">Toggle Instagram, Facebook, website embed, QR codes, and WhatsApp — each hands off to one shared lead form.</p>
+        </Link>
+      </div>
+
+      <div className="card px-6 py-5 max-w-2xl mt-5 space-y-1.5 hover:bg-[var(--color-ink-50)] transition-colors cursor-pointer">
+        <Link href="/settings/contracts" className="block w-full">
+          <div className="font-semibold text-[var(--color-ink-900)]">Contract Types &amp; Templates</div>
+          <p className="text-[12.5px] text-[var(--color-ink-600)] mt-1">Create contract types and reusable, merge-field wording — picked when starting a new project contract.</p>
         </Link>
       </div>
 

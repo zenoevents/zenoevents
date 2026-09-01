@@ -1,6 +1,6 @@
 "use server";
 
-import { db, contracts, contacts, projects } from "@/db";
+import { db, contracts, projects } from "@/db";
 import { and, eq } from "drizzle-orm";
 import { getClientSession } from "@/lib/client-portal/auth";
 import { nowISO } from "@/lib/money";
@@ -39,25 +39,44 @@ async function guardAcceptableContract(orgSlug: string, contractId: number) {
   return { session, contract };
 }
 
+/** Step 1 of the portal flow: agreeing to the terms, before the actual
+ *  signature. Doesn't touch `status`/`signedAt` — those only get set once
+ *  the client types their name to sign (portalSignContractAction below).
+ *  Kept as its own action so a client who accepts but doesn't finish signing
+ *  in the same visit doesn't leave the contract in a half-signed state. */
 export async function portalAcceptContractAction(orgSlug: string, contractId: number): Promise<{ success: true } | { error: string }> {
   try {
-    const { session, contract } = await guardAcceptableContract(orgSlug, contractId);
-    const [contact] = await db.select({ displayName: contacts.displayName }).from(contacts)
-      .where(and(eq(contacts.orgId, session.orgId), eq(contacts.id, session.contactId))).limit(1);
+    await guardAcceptableContract(orgSlug, contractId);
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not accept this contract" };
+  }
+}
+
+/** Step 2: the actual virtual signature — the client types their full name
+ *  to sign, same real-world weight as a typed e-signature elsewhere. This is
+ *  what actually flips status to "signed", visible to staff immediately
+ *  since it's the same `contracts` row ContractsPanel already reads. */
+export async function portalSignContractAction(orgSlug: string, contractId: number, typedName: string): Promise<{ success: true } | { error: string }> {
+  try {
+    const { contract } = await guardAcceptableContract(orgSlug, contractId);
+    const clean = typedName.trim();
+    if (!clean) throw new Error("Type your full name to sign");
     const ip = await clientIpFromHeaders();
 
     await db.update(contracts).set({
       status: "signed",
       signedAt: nowISO(),
-      signedByName: contact?.displayName ?? "Client (portal)",
+      signedByName: clean,
       signatureMethod: "portal_click",
       portalAcceptedIp: ip,
     }).where(eq(contracts.id, contract.id));
 
     revalidatePath(`/portal/${orgSlug}/projects/${contract.projectId}`);
+    revalidatePath(`/projects/${contract.projectId}`);
     return { success: true };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Could not accept this contract" };
+    return { error: err instanceof Error ? err.message : "Could not record your signature" };
   }
 }
 

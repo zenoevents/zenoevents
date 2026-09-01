@@ -1464,10 +1464,38 @@ export const contracts = pgTable("contracts", {
   // source of truth for "when/who" regardless of which method was used.
   signatureMethod: text("signature_method"),
   portalAcceptedIp: text("portal_accepted_ip"), // best-effort audit trail, portal_click only
+  contractTypeId: integer("contract_type_id").references(() => contractTypes.id),
+  paymentTerms: text("payment_terms"), // separate from `content`, same free-text/merge-field treatment
   createdAt: text("created_at").notNull(),
 }, (t) => ({
   orgProjectIdx: index("idx_contracts_org_project").on(t.orgId, t.projectId),
   statusIdx: index("idx_contracts_org_status").on(t.orgId, t.status),
+}));
+
+/** Admin-managed contract type list — same shape as customRoles: just a
+ *  name, created inline by the admin, not a hardcoded picklist. */
+export const contractTypes = pgTable("contract_types", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  name: text("name").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgNameIdx: uniqueIndex("idx_contract_types_org_name").on(t.orgId, t.name),
+}));
+
+/** Reusable contract wording per type — replaces the old single
+ *  org.contractTemplate field. Content and Payment Terms are independent
+ *  {{merge_field}} bodies, both interpolated onto a new contract. */
+export const contractTemplates = pgTable("contract_templates", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  contractTypeId: integer("contract_type_id").notNull().references(() => contractTypes.id),
+  name: text("name").notNull(),
+  content: text("content"),
+  paymentTerms: text("payment_terms"),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgTypeIdx: index("idx_contract_templates_org_type").on(t.orgId, t.contractTypeId),
 }));
 
 /** Generic per-project file store — contracts, moodboards, anything. Not

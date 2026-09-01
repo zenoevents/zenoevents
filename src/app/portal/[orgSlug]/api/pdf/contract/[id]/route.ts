@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
-import { db, contracts, projects, contacts } from "@/db";
+import { db, contracts, projects, contacts, contractTypes } from "@/db";
 import { and, eq } from "drizzle-orm";
 import { getClientSession } from "@/lib/client-portal/auth";
 import { ContractPdf } from "@/lib/pdf/ContractPdf";
 import { contentDisposition } from "@/lib/pdf-filename";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -17,15 +18,23 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orgSlug: st
   const o = session.org;
 
   const [row] = await db
-    .select({ contract: contracts, projectContactId: projects.contactId, projectName: projects.name, clientId: contacts.id, clientName: contacts.displayName, clientPhone: contacts.phone, clientEmail: contacts.email })
+    .select({ contract: contracts, projectContactId: projects.contactId, projectName: projects.name, clientId: contacts.id, clientName: contacts.displayName, clientPhone: contacts.phone, clientEmail: contacts.email, contractTypeName: contractTypes.name })
     .from(contracts)
     .innerJoin(projects, eq(projects.id, contracts.projectId))
     .leftJoin(contacts, eq(contacts.id, projects.contactId))
+    .leftJoin(contractTypes, eq(contractTypes.id, contracts.contractTypeId))
     .where(and(eq(contracts.orgId, session.orgId), eq(contracts.id, Number(id))))
     .limit(1);
 
   if (!row || row.projectContactId !== session.contactId) return new Response("Not found", { status: 404 });
   const contract = row.contract;
+
+  let signaturePhotoUrl: string | null = null;
+  if (contract.signaturePhotoPath) {
+    const supabase = createAdminClient();
+    const { data } = await supabase.storage.from("contracts").createSignedUrl(contract.signaturePhotoPath, 300);
+    signaturePhotoUrl = data?.signedUrl ?? null;
+  }
 
   const element = React.createElement(ContractPdf, {
     data: {
@@ -41,9 +50,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orgSlug: st
       startDate: contract.startDate,
       endDate: contract.endDate,
       content: contract.content,
+      paymentTerms: contract.paymentTerms,
+      contractTypeName: row.contractTypeName,
       status: contract.status,
       signedAt: contract.signedAt,
       signedByName: contract.signedByName,
+      signatureMethod: contract.signatureMethod,
+      signaturePhotoUrl,
     },
   });
 
