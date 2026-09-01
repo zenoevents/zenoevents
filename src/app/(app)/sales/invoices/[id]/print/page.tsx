@@ -1,6 +1,6 @@
 import { getOrg } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
-import { db, documents, documentLines, contacts, org, items } from "@/db";
+import { db, contacts } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
@@ -8,6 +8,7 @@ import { fmtKES } from "@/lib/money";
 import { TAX_CLASSES, type TaxClass } from "@/lib/tax";
 import { ETIMS_ENABLED } from "@/lib/features";
 import { LineDescription } from "@/components/LineDescription";
+import { getInvoiceWithBillableExpenses } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +16,13 @@ export default async function PrintInvoice({ params }: { params: Promise<{ id: s
   await requirePerm("invoices");
   const o = await getOrg();
   const { id } = await params;
-  const [doc] = await db.select().from(documents).where(and(eq(documents.orgId, o.id), eq(documents.id, Number(id)))).limit(1);
-  if (!doc || doc.type !== "invoice") notFound();
-  // Left join: lines typed freehand have no itemId and must still render.
-  const lineRows = await db
-    .select({ line: documentLines, itemName: items.name })
-    .from(documentLines)
-    .leftJoin(items, eq(documentLines.itemId, items.id))
-    .where(eq(documentLines.documentId, doc.id))
-    .orderBy(documentLines.position);
-  const lines = lineRows.map((r) => ({ ...r.line, itemName: r.itemName }));
+  // Same combined (real lines + virtual billable-expense lines) fetch the
+  // downloadable PDF route uses — this print view used to query documents/
+  // documentLines directly and silently ignore any billable expense tagged
+  // to the invoice, showing the pre-expense total instead of the real one.
+  const result = await getInvoiceWithBillableExpenses(Number(id), o.id);
+  if (!result || result.doc.type !== "invoice") notFound();
+  const { doc, lines } = result;
   const customer = doc.contactId
     ? (await db.select().from(contacts).where(and(eq(contacts.orgId, o.id), eq(contacts.id, doc.contactId))).limit(1))[0]
     : null;
