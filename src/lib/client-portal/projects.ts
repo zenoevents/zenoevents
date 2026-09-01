@@ -1,5 +1,5 @@
-import { db, projects, documents, contracts, paymentSchedule, projectNotes } from "@/db";
-import { and, eq, desc, inArray } from "drizzle-orm";
+import { db, projects, documents, contracts, paymentSchedule, projectNotes, payments } from "@/db";
+import { and, eq, desc, inArray, sql } from "drizzle-orm";
 
 /**
  * Plain orgId/contactId-parameter reads for the client portal — no
@@ -151,4 +151,66 @@ export async function getClientProjectTimeline(orgId: number, projectId: number)
   }
 
   return events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+/** Monthly received-payments trend, trailing N months — the Overview
+ *  page's hero chart. Direction "in" only (customer payments), across
+ *  every project/document, not scoped to one. */
+export async function getClientPaymentsTrend(orgId: number, contactId: number, months = 6) {
+  const since = new Date();
+  since.setMonth(since.getMonth() - (months - 1));
+  since.setDate(1);
+  const sinceStr = since.toISOString().slice(0, 10);
+
+  const rows = await db.select({ date: payments.date, amountCents: payments.amountCents })
+    .from(payments)
+    .where(and(eq(payments.orgId, orgId), eq(payments.contactId, contactId), eq(payments.direction, "in"), sql`${payments.date} >= ${sinceStr}`));
+
+  const buckets: { label: string; collected: number }[] = [];
+  const now = new Date();
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({ label: d.toLocaleDateString("en-KE", { month: "short" }), collected: 0 });
+  }
+  for (const r of rows) {
+    const d = new Date(r.date);
+    const monthsAgo = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    const idx = months - 1 - monthsAgo;
+    if (idx >= 0 && idx < buckets.length) buckets[idx].collected += r.amountCents;
+  }
+  return buckets;
+}
+
+/** Cross-project aggregate stats for the Overview page — active project
+ *  count, total collected/outstanding across every real invoice, and the
+ *  soonest upcoming event. */
+export async function getClientDashboardStats(orgId: number, contactId: number) {
+  const [projectRows, docRows] = await Promise.all([
+    db.select({ id: projects.id, name: projects.name, status: projects.status, eventDate: projects.eventDate })
+      .from(projects).where(and(eq(projects.orgId, orgId), eq(projects.contactId, contactId))),
+    db.select({ status: documents.status, totalCents: documents.totalCents, paidCents: documents.paidCents, dueDate: documents.dueDate, type: documents.type })
+      .from(documents).where(and(eq(documents.orgId, orgId), eq(documents.contactId, contactId), eq(documents.type, "invoice"))),
+  ]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const activeProjects = projectRows.filter((p) => p.status !== "cancelled" && p.status !== "completed");
+  const upcoming = activeProjects.filter((p) => p.eventDate >= today).sort((a, b) => (a.eventDate < b.eventDate ? -1 : 1));
+
+  const realInvoices = docRows.filter((d) => d.status !== "draft" && d.status !== "void");
+  const totalInvoicedCents = realInvoices.reduce((s, d) => s + d.totalCents, 0);
+  const totalCollectedCents = realInvoices.reduce((s, d) => s + d.paidCents, 0);
+  const outstandingCents = Math.max(0, totalInvoicedCents - totalCollectedCents);
+  const unpaidCount = realInvoices.filter((d) => ["open", "partial"].includes(d.status)).length;
+  const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const eventsIn30Days = upcoming.filter((p) => p.eventDate <= in30Days).length;
+
+  return {
+    activeProjectCount: activeProjects.length,
+    totalInvoicedCents,
+    totalCollectedCents,
+    outstandingCents,
+    unpaidCount,
+    eventsIn30Days,
+    nextEvent: upcoming[0] ?? null,
+  };
 }
