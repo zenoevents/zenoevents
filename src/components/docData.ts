@@ -1,4 +1,4 @@
-import { db, contacts, items, accounts, bankAccounts, members, documents, documentLines, documentAssignments, costCenters, warehouses, itemGroups, projects, customerGroups } from "@/db";
+import { db, contacts, items, accounts, bankAccounts, members, documents, documentLines, documentAssignments, costCenters, warehouses, itemGroups, projects, customerGroups, inventoryItems } from "@/db";
 import { and, eq, inArray, desc } from "drizzle-orm";
 import { getOrg } from "@/lib/org";
 import { getAccess } from "@/lib/access";
@@ -33,6 +33,23 @@ export async function editorOptions(side: "sale" | "purchase") {
     : [];
   const costCenterRows = await db.select().from(costCenters).where(and(eq(costCenters.orgId, orgId), eq(costCenters.active, true)));
   const warehouseRows = await db.select().from(warehouses).where(and(eq(warehouses.orgId, orgId), eq(warehouses.archived, false)));
+  // Event Inventory items whose rental batches all sit in exactly one
+  // warehouse — auto-fills a document line's warehouse on pick instead of
+  // leaving it to silently default. An item split across warehouses stays
+  // out of this map on purpose; that ambiguity still needs a human pick.
+  const inventoryWarehouseRows = await db.select({ itemId: inventoryItems.itemId, warehouseId: inventoryItems.warehouseId })
+    .from(inventoryItems).where(eq(inventoryItems.orgId, orgId));
+  const warehousesByItem = new Map<number, Set<number>>();
+  for (const r of inventoryWarehouseRows) {
+    if (r.warehouseId == null) continue;
+    const set = warehousesByItem.get(r.itemId) ?? new Set<number>();
+    set.add(r.warehouseId);
+    warehousesByItem.set(r.itemId, set);
+  }
+  const itemWarehouses: Record<number, number> = {};
+  for (const [itemId, set] of warehousesByItem) {
+    if (set.size === 1) itemWarehouses[itemId] = [...set][0];
+  }
   const projectRows = await db.select({ id: projects.id, name: projects.name }).from(projects).where(eq(projects.orgId, orgId)).orderBy(desc(projects.eventDate));
   const customerGroupRows = await db.select({ id: customerGroups.id, label: customerGroups.name }).from(customerGroups).where(eq(customerGroups.orgId, orgId)).orderBy(customerGroups.name);
 
@@ -76,6 +93,7 @@ export async function editorOptions(side: "sale" | "purchase") {
     // Only surface a warehouse picker once an org actually has more than one —
     // single-location orgs never see this UI at all.
     warehouses: warehouseRows.length > 1 ? warehouseRows.map((w) => ({ id: w.id, label: w.name })) : [],
+    itemWarehouses,
   };
 }
 

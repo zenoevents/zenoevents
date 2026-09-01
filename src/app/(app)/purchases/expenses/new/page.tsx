@@ -26,6 +26,7 @@ export default async function NewExpensePage({
         items={[]}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
+        itemWarehouses={opts.itemWarehouses}
         expenseAccounts={opts.expenseAccounts}
         bankAccounts={opts.bankAccounts}
         vendorPayouts={opts.vendorPayouts}

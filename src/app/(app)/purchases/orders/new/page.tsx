@@ -21,6 +21,7 @@ export default async function NewPurchaseOrderPage() {
         itemGroupsRequired={opts.itemGroupsRequired}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
+        itemWarehouses={opts.itemWarehouses}
         expenseAccounts={opts.expenseAccounts}
         vendorPayouts={opts.vendorPayouts}
         backHref="/purchases/orders"

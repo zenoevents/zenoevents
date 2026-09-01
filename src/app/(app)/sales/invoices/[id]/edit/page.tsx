@@ -38,6 +38,7 @@ export default async function EditInvoicePage({
         items={opts.items}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
+        itemWarehouses={opts.itemWarehouses}
         projects={opts.projects}
         backHref={`/sales/invoices/${docId}`}
         detailHref="/sales/invoices"

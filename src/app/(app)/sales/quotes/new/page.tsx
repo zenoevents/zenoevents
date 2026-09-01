@@ -36,6 +36,7 @@ export default async function NewQuotePage({
         items={opts.items}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
+        itemWarehouses={opts.itemWarehouses}
         defaultContactId={defaultContactId}
         projects={opts.projects}
         defaultProjectId={defaultProjectId}

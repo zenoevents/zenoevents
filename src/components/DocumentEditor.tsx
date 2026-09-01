@@ -96,6 +96,7 @@ export function DocumentEditor({
   bankAccounts,
   costCenters = [],
   warehouses = [],
+  itemWarehouses,
   vendorPayouts,
   backHref,
   detailHref,
@@ -123,6 +124,10 @@ export function DocumentEditor({
   bankAccounts?: Option[];
   costCenters?: Option[];
   warehouses?: Option[];
+  /** itemId -> warehouseId, only present when that item's Event Inventory
+   *  batches all sit in a single warehouse (unambiguous). Auto-fills a
+   *  line's warehouse on pick instead of leaving it to default silently. */
+  itemWarehouses?: Record<number, number>;
   backHref: string;
   /** e.g. "/sales/invoices" — new doc id is appended */
   detailHref?: string;
@@ -324,6 +329,15 @@ export function DocumentEditor({
       // EXCEPT category, which then blocked saving with "pick a category"
       // for something the item already had an answer for.
       ...(isSpendDoc && !it.trackInventory ? { accountId: it.purchaseAccountId ?? null } : {}),
+      // Same idea for warehouse: an item that's also an Event Inventory
+      // catalog item and only ever stored in one warehouse gets that
+      // warehouse filled in automatically — left blank before, a line
+      // would silently save against whatever warehouse happened to be
+      // first in the dropdown instead of where the gear actually is.
+      // Only when the item's warehouse is unambiguous (every one of its
+      // inventory batches sits in the same single warehouse) — anything
+      // split across warehouses is correctly left for staff to pick.
+      ...(itemWarehouses?.[itemId] ? { warehouseId: itemWarehouses[itemId] } : {}),
     });
   }
 

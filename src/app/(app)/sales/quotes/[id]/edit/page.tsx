@@ -38,6 +38,7 @@ export default async function EditQuotePage({
         items={opts.items}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
+        itemWarehouses={opts.itemWarehouses}
         projects={opts.projects}
         backHref={`/sales/quotes/${docId}`}
         detailHref="/sales/quotes"

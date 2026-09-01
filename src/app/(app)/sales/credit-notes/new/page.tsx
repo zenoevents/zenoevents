@@ -50,6 +50,7 @@ export default async function NewCreditNotePage({
         items={opts.items}
         costCenters={opts.costCenters}
         warehouses={opts.warehouses}
+        itemWarehouses={opts.itemWarehouses}
         defaultContactId={defaultContactId}
         sourceInvoiceId={sourceInvoiceId}
         defaultNotes={defaultNotes}
