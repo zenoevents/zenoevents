@@ -9,7 +9,9 @@ export function FinancialBars({
   budgetCents: number;
   invoicedCents: number;
   collectedCents: number;
-  marginCents: number;
+  /** Omitted entirely on the client portal — margin reveals cost basis,
+   *  which stays internal-only. The badge just doesn't render without it. */
+  marginCents?: number;
 }) {
   const maxCents = Math.max(budgetCents, invoicedCents, 1);
   const invoicedPct = Math.min(100, (invoicedCents / maxCents) * 100);
@@ -20,7 +22,7 @@ export function FinancialBars({
   const ringRadius = 40;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const collectedFraction = invoicedCents > 0 ? Math.min(1, collectedCents / invoicedCents) : 0;
-  const marginPct = invoicedCents > 0 ? Math.round((marginCents / invoicedCents) * 100) : null;
+  const marginPct = marginCents !== undefined && invoicedCents > 0 ? Math.round((marginCents / invoicedCents) * 100) : null;
 
   return (
     <div className="card p-5">

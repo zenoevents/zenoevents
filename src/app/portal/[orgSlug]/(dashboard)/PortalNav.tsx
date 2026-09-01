@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
+  { href: "dashboard", label: "Overview" },
   { href: "projects", label: "Projects" },
   { href: "documents", label: "Invoices & Quotes" },
-  { href: "dashboard", label: "Overview" },
   { href: "knowledge", label: "Help & Articles" },
   { href: "profile", label: "Profile" },
 ];

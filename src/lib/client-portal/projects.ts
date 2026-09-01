@@ -21,6 +21,7 @@ export async function listClientProjects(orgId: number, contactId: number) {
       status: projects.status,
       colorTheme: projects.colorTheme,
       budgetCents: projects.budgetCents,
+      createdAt: projects.createdAt,
     })
     .from(projects)
     .where(and(eq(projects.orgId, orgId), eq(projects.contactId, contactId)))
@@ -38,6 +39,7 @@ export async function getClientProject(orgId: number, contactId: number, project
       status: projects.status,
       colorTheme: projects.colorTheme,
       budgetCents: projects.budgetCents,
+      createdAt: projects.createdAt,
     })
     .from(projects)
     .where(and(eq(projects.orgId, orgId), eq(projects.contactId, contactId), eq(projects.id, projectId)))
