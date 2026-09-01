@@ -329,7 +329,7 @@ export default async function ProjectDetailPage({
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="text-[13px] font-semibold">Quotes</div>
-              <Link href={`/sales/quotes/new?project=${projectId}`} className="text-[12.5px] font-medium text-[var(--color-accent-600)] hover:underline">+ New Quote</Link>
+              <Link href={`/sales/quotes/new?project=${projectId}${project.contactId ? `&contact=${project.contactId}` : ""}`} className="text-[12.5px] font-medium text-[var(--color-accent-600)] hover:underline">+ New Quote</Link>
             </div>
             {quoteDocs.length === 0 ? (
               <EmptyState title="No quotes yet" body="Quotes created for this event — either from here or tagged to this project from the main Quotes screen — show up here." />
@@ -343,7 +343,7 @@ export default async function ProjectDetailPage({
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="text-[13px] font-semibold">Invoices</div>
-              <Link href={`/sales/invoices/new?project=${projectId}`} className="text-[12.5px] font-medium text-[var(--color-accent-600)] hover:underline">+ New Invoice</Link>
+              <Link href={`/sales/invoices/new?project=${projectId}${project.contactId ? `&contact=${project.contactId}` : ""}`} className="text-[12.5px] font-medium text-[var(--color-accent-600)] hover:underline">+ New Invoice</Link>
             </div>
             {invoiceDocs.length === 0 ? (
               <EmptyState title="No invoices yet" body="Invoices tagged to this project — including milestone invoices generated from the Payment Schedule tab — show up here." />
