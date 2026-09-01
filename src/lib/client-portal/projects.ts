@@ -1,4 +1,4 @@
-import { db, projects, documents, contracts, paymentSchedule } from "@/db";
+import { db, projects, documents, contracts, paymentSchedule, projectNotes } from "@/db";
 import { and, eq, desc, inArray } from "drizzle-orm";
 
 /**
@@ -88,6 +88,16 @@ export async function getClientProjectDocuments(orgId: number, contactId: number
       inArray(documents.type, ["invoice", "quote"]),
     ))
     .orderBy(desc(documents.date));
+}
+
+/** Client-visible notes only — view-only by design (no create/edit action
+ *  exists on this side at all, not just a hidden UI control). */
+export async function getClientProjectNotes(orgId: number, projectId: number) {
+  return db
+    .select()
+    .from(projectNotes)
+    .where(and(eq(projectNotes.orgId, orgId), eq(projectNotes.projectId, projectId), eq(projectNotes.clientVisible, true)))
+    .orderBy(desc(projectNotes.createdAt));
 }
 
 export async function getClientProjectContracts(orgId: number, projectId: number) {

@@ -5,7 +5,9 @@ import {
   getClientProjectDocuments,
   getClientProjectContracts,
   getClientProjectTimeline,
+  getClientProjectNotes,
 } from "@/lib/client-portal/projects";
+import { NOTE_CATEGORY_META, type NoteCategory } from "@/lib/project-note-categories";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, StatusPill, Money } from "@/components/ui";
@@ -34,11 +36,12 @@ export default async function ClientPortalProjectDetail({
   const project = await getClientProject(session.orgId, session.contactId, projectId);
   if (!project) notFound();
 
-  const [schedule, docs, contracts, timeline] = await Promise.all([
+  const [schedule, docs, contracts, timeline, notes] = await Promise.all([
     getClientPaymentSchedule(session.orgId, projectId),
     getClientProjectDocuments(session.orgId, session.contactId, projectId),
     getClientProjectContracts(session.orgId, projectId),
     getClientProjectTimeline(session.orgId, projectId),
+    getClientProjectNotes(session.orgId, projectId),
   ]);
 
   return (
@@ -162,6 +165,28 @@ export default async function ClientPortalProjectDetail({
               </div>
             )}
           </div>
+
+          {notes.length > 0 && (
+            <div className="card p-4">
+              <div className="text-[13px] font-semibold text-[var(--color-ink-600)] mb-3">Notes</div>
+              <div className="space-y-3">
+                {notes.map((n) => {
+                  const meta = NOTE_CATEGORY_META[(n.category as NoteCategory) in NOTE_CATEGORY_META ? (n.category as NoteCategory) : "internal"];
+                  return (
+                    <div key={n.id} className="rounded-xl border border-[var(--color-ink-100)] px-3.5 py-3" style={{ background: meta.bg + "55" }}>
+                      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: meta.bg, color: meta.color }}>
+                        {meta.icon} {meta.label}
+                      </span>
+                      <div className="text-[13px] text-[var(--color-ink-900)] mt-2 whitespace-pre-wrap leading-relaxed">{n.content}</div>
+                      <div className="text-[11px] text-[var(--color-ink-400)] mt-2">
+                        <span className="font-medium">{n.authorName}</span> · {n.createdAt.slice(0, 10)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

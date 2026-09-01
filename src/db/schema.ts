@@ -1508,6 +1508,28 @@ export const projectTasks = pgTable("project_tasks", {
   orgProjectIdx: index("idx_project_tasks_org_project").on(t.orgId, t.projectId),
 }));
 
+/** Project-scoped notes with real metadata (who/when/why) — the "smart
+ *  notes" tab, distinct from the generic per-contact `activities` log
+ *  (no author, no category, no project scoping there). authorName is a
+ *  snapshot captured at write time (access.memberName already resolves
+ *  correctly for both a member and the owner), so display never needs a
+ *  join or a null-owner special case. clientVisible defaults false — an
+ *  internal note is never client-visible unless a staff member deliberately
+ *  flags it, one toggle at a time. */
+export const projectNotes = pgTable("project_notes", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => org.id),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  authorMemberId: integer("author_member_id"),
+  authorName: text("author_name").notNull(),
+  category: text("category").notNull().default("internal"), // client_update | internal | follow_up | payment | venue
+  content: text("content").notNull(),
+  clientVisible: boolean("client_visible").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+}, (t) => ({
+  orgProjectIdx: index("idx_project_notes_org_project").on(t.orgId, t.projectId),
+}));
+
 /** Photo-backed liability record, one per damaged/missing unit. No row can
  *  represent a "Damaged" status without a photoUrl — enforced in the UI/
  *  action layer (camera-only capture), not the DB, same as other required-

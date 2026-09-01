@@ -1214,3 +1214,17 @@ ALTER TABLE org ADD COLUMN IF NOT EXISTS instagram_post_urls JSONB;
 -- Client portal project-based view + contract client-accept flow.
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS signature_method TEXT;
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS portal_accepted_ip TEXT;
+
+-- Project Notes tab — smart notes with who/when/why metadata, optional client visibility.
+CREATE TABLE IF NOT EXISTS project_notes (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES org(id),
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  author_member_id INTEGER,
+  author_name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'internal',
+  content TEXT NOT NULL,
+  client_visible BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_notes_org_project ON project_notes(org_id, project_id);

@@ -9,6 +9,8 @@ import { listDamageReportsForProject } from "@/lib/damage-reports";
 import { listContractsForProject } from "@/lib/contracts";
 import { listProjectFiles } from "@/lib/project-files";
 import { listProjectTasks, listActiveStaff } from "@/lib/project-tasks";
+import { listProjectNotes } from "@/lib/project-notes";
+import { NotesPanel } from "./NotesPanel";
 import { listProjectAuditLog } from "@/lib/audit";
 import { getDamagePhotoUrlAction } from "@/lib/damage-reports";
 import { todayISO } from "@/lib/money";
@@ -57,6 +59,7 @@ const TABS = [
   { key: "damage", label: "Damage Reports", icon: "⚠️" },
   { key: "contracts", label: "Contracts", icon: "📜" },
   { key: "files", label: "Files", icon: "🗂️" },
+  { key: "notes", label: "Notes", icon: "🗒️" },
   { key: "tasks", label: "Tasks", icon: "✅" },
   { key: "milestones", label: "Milestones", icon: "🚀" },
   { key: "audit", label: "Audit Log", icon: "🕒" },
@@ -121,7 +124,7 @@ export default async function ProjectDetailPage({
   const { tab: tabParam } = await searchParams;
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "overview";
 
-  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts, files, tasks, staff, timelineEvents, auditRows, overviewStats] = await Promise.all([
+  const [financials, docs, inventoryOptions, itemReservations, milestones, damageReports, contracts, files, tasks, staff, timelineEvents, auditRows, overviewStats, notes] = await Promise.all([
     projectFinancials(projectId),
     projectDocuments(projectId),
     listInventoryInstances(),
@@ -135,6 +138,7 @@ export default async function ProjectDetailPage({
     getProjectMilestones(projectId),
     listProjectAuditLog(projectId),
     getProjectOverviewStats(projectId),
+    listProjectNotes(projectId),
   ]);
 
   const mostRecentDamage = damageReports[0] ?? null;
@@ -419,6 +423,10 @@ export default async function ProjectDetailPage({
 
         {tab === "files" && (
           <FilesPanel projectId={project.id} files={files} />
+        )}
+
+        {tab === "notes" && (
+          <NotesPanel projectId={project.id} notes={notes} />
         )}
 
         {tab === "tasks" && (
