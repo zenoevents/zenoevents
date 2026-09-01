@@ -1,8 +1,101 @@
-import { db, projects, reservations, inventoryItems, documents, manifests } from "@/db";
-import { eq, and, inArray, notInArray } from "drizzle-orm";
+import { db, projects, reservations, inventoryItems, documents, documentLines, manifests } from "@/db";
+import { eq, and, inArray, notInArray, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { nowISO } from "@/lib/money";
 import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/project-status";
+
+/** Same overlap check as inventory-instances.ts's checkReservationConflict —
+ *  duplicated in-line rather than imported, since that file (via saveItem)
+ *  chains back into actions.ts, which imports this module: importing it back
+ *  would close a 3-way circular "use server" import. */
+async function hasReservationConflict(orgId: number, inventoryItemId: number, startDate: string, endDate: string): Promise<boolean> {
+  const [row] = await db.select({ id: reservations.id }).from(reservations)
+    .where(and(
+      eq(reservations.orgId, orgId),
+      eq(reservations.inventoryItemId, inventoryItemId),
+      ne(reservations.status, "cancelled"),
+      sql`${reservations.startDate} <= ${endDate}`,
+      sql`${reservations.endDate} >= ${startDate}`,
+    )).limit(1);
+  return !!row;
+}
+
+/**
+ * Confirming a project from its real invoice content — not a suggestion,
+ * an actual booking — but only where it's unambiguous: a line's item auto-
+ * books only when it maps to exactly one Event Inventory batch (same
+ * conservative rule the warehouse auto-fill already uses), there's enough
+ * free qty in that batch, and the date doesn't conflict with another
+ * project's booking. Anything ambiguous, short, or conflicting is skipped
+ * silently — staff sorts it out manually via the Reserve Inventory panel;
+ * this never blocks the project from confirming.
+ */
+async function autoBookReservationsFromInvoices(orgId: number, projectId: number): Promise<number> {
+  const [project] = await db.select({ eventDate: projects.eventDate }).from(projects)
+    .where(and(eq(projects.orgId, orgId), eq(projects.id, projectId))).limit(1);
+  if (!project) return 0;
+
+  const lines = await db.select({ itemId: documentLines.itemId, qty: documentLines.qty })
+    .from(documentLines)
+    .innerJoin(documents, eq(documents.id, documentLines.documentId))
+    .where(and(
+      eq(documents.orgId, orgId),
+      eq(documents.projectId, projectId),
+      eq(documents.type, "invoice"),
+      notInArray(documents.status, ["draft", "void"]),
+    ));
+
+  const qtyByItem = new Map<number, number>();
+  for (const l of lines) {
+    if (!l.itemId) continue;
+    qtyByItem.set(l.itemId, (qtyByItem.get(l.itemId) ?? 0) + l.qty);
+  }
+  if (qtyByItem.size === 0) return 0;
+
+  const batches = await db.select({ id: inventoryItems.id, itemId: inventoryItems.itemId, qty: inventoryItems.qty, status: inventoryItems.status })
+    .from(inventoryItems)
+    .where(and(eq(inventoryItems.orgId, orgId), inArray(inventoryItems.itemId, [...qtyByItem.keys()])));
+
+  const batchesByItem = new Map<number, typeof batches>();
+  for (const b of batches) {
+    const arr = batchesByItem.get(b.itemId) ?? [];
+    arr.push(b);
+    batchesByItem.set(b.itemId, arr);
+  }
+
+  const existing = await db.select({ inventoryItemId: reservations.inventoryItemId }).from(reservations)
+    .where(and(eq(reservations.orgId, orgId), eq(reservations.projectId, projectId), ne(reservations.status, "cancelled")));
+  const alreadyReservedIds = new Set(existing.map((r) => r.inventoryItemId));
+
+  let bookedCount = 0;
+  for (const [itemId, qty] of qtyByItem) {
+    const itemBatches = batchesByItem.get(itemId);
+    if (!itemBatches || itemBatches.length !== 1) continue;
+    const batch = itemBatches[0];
+    if (alreadyReservedIds.has(batch.id)) continue;
+    if (batch.qty < qty) continue;
+
+    const conflict = await hasReservationConflict(orgId, batch.id, project.eventDate, project.eventDate);
+    if (conflict) continue;
+
+    await db.insert(reservations).values({
+      orgId,
+      inventoryItemId: batch.id,
+      projectId,
+      qty,
+      startDate: project.eventDate,
+      endDate: project.eventDate,
+      status: "booked",
+      createdAt: nowISO(),
+    });
+    if (batch.status === "in_store") {
+      await db.update(inventoryItems).set({ status: "reserved" }).where(eq(inventoryItems.id, batch.id));
+    }
+    bookedCount++;
+  }
+  return bookedCount;
+}
 
 /**
  * Moves a project's status forward automatically when a real lifecycle event
@@ -26,6 +119,7 @@ export async function advanceProjectStatus(orgId: number, projectId: number, tar
   await db.update(projects).set({ status: target }).where(eq(projects.id, projectId));
 
   let promotedCount = 0;
+  let autoBookedCount = 0;
   if (target === "confirmed") {
     const quoted = await db.select({ id: reservations.id, inventoryItemId: reservations.inventoryItemId })
       .from(reservations)
@@ -41,13 +135,18 @@ export async function advanceProjectStatus(orgId: number, projectId: number, tar
       ));
       promotedCount = quoted.length;
     }
+    autoBookedCount = await autoBookReservationsFromInvoices(orgId, projectId);
   }
 
+  const notes = [
+    promotedCount > 0 ? `+${promotedCount} reservations booked` : null,
+    autoBookedCount > 0 ? `+${autoBookedCount} items auto-booked from invoice` : null,
+  ].filter(Boolean);
   await logAudit({
     action: "project.status",
     module: "projects",
     recordId: projectId,
-    detail: promotedCount > 0 ? `${target} (auto: ${reason}, +${promotedCount} reservations booked)` : `${target} (auto: ${reason})`,
+    detail: notes.length > 0 ? `${target} (auto: ${reason}, ${notes.join(", ")})` : `${target} (auto: ${reason})`,
     projectId,
   });
   revalidatePath("/projects");
