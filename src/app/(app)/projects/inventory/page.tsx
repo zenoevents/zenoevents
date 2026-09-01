@@ -53,6 +53,9 @@ export default async function InventoryInstancesPage({
         subtitle="Durable, rentable gear tracked by unit or labeled batch — where it is, not just how many."
         action={
           <div className="flex items-center gap-2">
+            <Link href="/projects/inventory/hire" className="rounded-lg border border-[var(--color-ink-200)] bg-white hover:bg-[var(--color-ink-50)] text-[13px] font-medium px-4 py-2 h-9 inline-flex items-center justify-center">
+              Hire Out
+            </Link>
             <CsvImporter entity="inventory" label="Bulk import inventory" />
             <PrimaryLink href="/projects/inventory/new">+ New item</PrimaryLink>
           </div>
