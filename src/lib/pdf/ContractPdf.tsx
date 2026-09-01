@@ -38,6 +38,11 @@ export interface PdfContractData {
    *  since that single printed page is presumed to carry both. */
   staffSignedAt: string | null;
   staffSignedByName: string | null;
+  /** Signed URLs to the drawn (finger/mouse) signature-pad marks, resolved
+   *  server-side same as signaturePhotoUrl. When present, this real drawn
+   *  mark renders instead of a cursive rendering of the name. */
+  signatureDrawingUrl: string | null;
+  staffSignatureDrawingUrl: string | null;
 }
 
 function makeStyles(brand: string) {
@@ -64,6 +69,7 @@ function makeStyles(brand: string) {
     unsigned: { color: "#86868b" },
     signatureName: { fontSize: 20, fontFamily: "Times-Italic", marginTop: 6, marginBottom: 2 },
     signaturePhoto: { maxWidth: 320, maxHeight: 140, marginTop: 6, marginBottom: 2, objectFit: "contain" },
+    signatureDrawing: { maxWidth: 220, maxHeight: 70, marginTop: 6, marginBottom: 2, objectFit: "contain" },
     signatureMeta: { fontSize: 9, color: "#6e6e73", marginTop: 2 },
 
     footer: { position: "absolute", bottom: 48, left: 48, right: 48, fontSize: 8, color: "#86868b", textAlign: "center" },
@@ -157,8 +163,12 @@ export function ContractPdf({ data }: { data: PdfContractData }) {
                 {data.signedAt ? (
                   <>
                     <Text style={s.signed}>Signed</Text>
-                    <Text style={s.signatureName}>{data.signedByName}</Text>
-                    <Text style={s.signatureMeta}>{formatSignedAt(data.signedAt)}</Text>
+                    {data.signatureDrawingUrl ? (
+                      <Image src={data.signatureDrawingUrl} style={s.signatureDrawing} />
+                    ) : (
+                      <Text style={s.signatureName}>{data.signedByName}</Text>
+                    )}
+                    <Text style={s.signatureMeta}>{data.signedByName} · {formatSignedAt(data.signedAt)}</Text>
                   </>
                 ) : (
                   <Text style={s.unsigned}>Awaiting signature</Text>
@@ -169,8 +179,12 @@ export function ContractPdf({ data }: { data: PdfContractData }) {
                 {data.staffSignedAt ? (
                   <>
                     <Text style={s.signed}>Signed</Text>
-                    <Text style={s.signatureName}>{data.staffSignedByName}</Text>
-                    <Text style={s.signatureMeta}>{formatSignedAt(data.staffSignedAt)}</Text>
+                    {data.staffSignatureDrawingUrl ? (
+                      <Image src={data.staffSignatureDrawingUrl} style={s.signatureDrawing} />
+                    ) : (
+                      <Text style={s.signatureName}>{data.staffSignedByName}</Text>
+                    )}
+                    <Text style={s.signatureMeta}>{data.staffSignedByName} · {formatSignedAt(data.staffSignedAt)}</Text>
                   </>
                 ) : (
                   <Text style={s.unsigned}>Awaiting signature</Text>

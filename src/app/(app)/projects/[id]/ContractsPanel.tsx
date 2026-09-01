@@ -5,6 +5,7 @@ import { createContractAction, updateContractStatusAction, signContractAction, s
 import { CONTRACT_STATUS_LABELS, type ContractStatus } from "@/lib/contract-status";
 import { fmtKES } from "@/lib/money";
 import { PhotoCapture } from "@/components/PhotoCapture";
+import { SignaturePad } from "@/components/SignaturePad";
 import { EmptyState } from "@/components/ui";
 
 type ContractRow = {
@@ -90,15 +91,17 @@ function SignRow({ contract, onDone }: { contract: ContractRow; onDone: () => vo
 function CountersignRow({ contract, currentStaffName, onDone }: { contract: ContractRow; currentStaffName: string; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [typedName, setTypedName] = useState(currentStaffName);
+  const [signature, setSignature] = useState<{ base64: string; mimeType: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
     setError(null);
     if (!typedName.trim()) { setError("Type your name to sign"); return; }
+    if (!signature) { setError("Draw your signature to sign"); return; }
     setPending(true);
     try {
-      const result = await staffSignContractAction(contract.id, typedName);
+      const result = await staffSignContractAction(contract.id, typedName, signature.base64, signature.mimeType);
       if ("error" in result) { setError(result.error); return; }
       onDone();
     } finally {
@@ -112,12 +115,12 @@ function CountersignRow({ contract, currentStaffName, onDone }: { contract: Cont
 
   return (
     <div className="mt-2 rounded-lg border border-dashed border-[var(--color-ink-200)] p-3 space-y-2 w-full">
+      <SignaturePad onChange={setSignature} height={120} />
       <input
         value={typedName}
         onChange={(e) => setTypedName(e.target.value)}
         placeholder="Your full name"
-        className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[15px] italic outline-none focus:border-[var(--color-accent-500)]"
-        style={{ fontFamily: "cursive" }}
+        className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
       />
       {error && <div className="text-[11.5px] text-[var(--color-bad)]">{error}</div>}
       <div className="flex gap-3">

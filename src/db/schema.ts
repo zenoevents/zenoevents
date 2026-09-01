@@ -1456,9 +1456,14 @@ export const contracts = pgTable("contracts", {
   endDate: text("end_date"),
   status: text("status").notNull().default("draft"), // draft | sent | signed | declined | expired
   content: text("content"), // plain-text terms
-  signaturePhotoPath: text("signature_photo_path"), // storage path — private bucket, signed URL on read
+  signaturePhotoPath: text("signature_photo_path"), // wet-ink page photo — storage path, private bucket, signed URL on read
   signedAt: text("signed_at"),
   signedByName: text("signed_by_name"),
+  // A drawn (finger/mouse) signature captured on the client portal's
+  // signature pad — a PNG in the same private "contracts" bucket as the
+  // wet-ink photo, rendered as the actual signature mark on the PDF instead
+  // of a cursive rendering of signedByName.
+  signatureDrawingPath: text("signature_drawing_path"),
   // wet_ink | portal_click — null on rows predating this column (implicitly
   // wet_ink if signedAt is set). signedAt/signedByName are the CLIENT's
   // signature specifically now — see staffSigned* below for the company side.
@@ -1471,6 +1476,7 @@ export const contracts = pgTable("contracts", {
   staffSignedAt: text("staff_signed_at"),
   staffSignedByName: text("staff_signed_by_name"),
   staffSignedByMemberId: integer("staff_signed_by_member_id"),
+  staffSignatureDrawingPath: text("staff_signature_drawing_path"), // same drawn-signature mechanism, staff side
   contractTypeId: integer("contract_type_id").references(() => contractTypes.id),
   paymentTerms: text("payment_terms"), // separate from `content`, same free-text/merge-field treatment
   createdAt: text("created_at").notNull(),

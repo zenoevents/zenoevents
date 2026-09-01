@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { getClientSession } from "@/lib/client-portal/auth";
 import { nowISO } from "@/lib/money";
 import { revalidatePath } from "next/cache";
+import { uploadContractSignatureImage } from "@/lib/contracts";
 
 async function clientIpFromHeaders(): Promise<string | null> {
   try {
@@ -54,25 +55,30 @@ export async function portalAcceptContractAction(orgSlug: string, contractId: nu
   }
 }
 
-/** Step 2: the actual virtual signature — the client types their full name
- *  to sign, same real-world weight as a typed e-signature elsewhere. This is
- *  the CLIENT's signature specifically — a separate, independent one from
- *  the company/planner's own countersignature (staffSignContractAction on
- *  the staff side). Only flips status to "signed" (fully executed) if staff
- *  already countersigned; otherwise the contract just records the client's
- *  side and waits, visible to staff immediately either way since it's the
- *  same `contracts` row ContractsPanel already reads. */
-export async function portalSignContractAction(orgSlug: string, contractId: number, typedName: string): Promise<{ success: true } | { error: string }> {
+/** Step 2: the actual virtual signature — the client draws their signature
+ *  on a signature pad (plus types their name as the printed/legal name
+ *  alongside it, same convention e-sign platforms use), same real-world
+ *  weight as a wet-ink signature. This is the CLIENT's signature
+ *  specifically — a separate, independent one from the company/planner's
+ *  own countersignature (staffSignContractAction on the staff side). Only
+ *  flips status to "signed" (fully executed) if staff already countersigned;
+ *  otherwise the contract just records the client's side and waits, visible
+ *  to staff immediately either way since it's the same `contracts` row
+ *  ContractsPanel already reads. */
+export async function portalSignContractAction(orgSlug: string, contractId: number, typedName: string, base64Signature: string, mimeType: string): Promise<{ success: true } | { error: string }> {
   try {
-    const { contract } = await guardAcceptableContract(orgSlug, contractId);
+    const { session, contract } = await guardAcceptableContract(orgSlug, contractId);
     const clean = typedName.trim();
     if (!clean) throw new Error("Type your full name to sign");
+    if (!base64Signature) throw new Error("Draw your signature to sign");
     const ip = await clientIpFromHeaders();
     const fullySigned = !!contract.staffSignedAt;
+    const drawingPath = await uploadContractSignatureImage(session.orgId, base64Signature, mimeType);
 
     await db.update(contracts).set({
       signedAt: nowISO(),
       signedByName: clean,
+      signatureDrawingPath: drawingPath,
       signatureMethod: "portal_click",
       portalAcceptedIp: ip,
       ...(fullySigned ? { status: "signed" } : {}),

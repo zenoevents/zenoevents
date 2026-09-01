@@ -29,12 +29,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orgSlug: st
   if (!row || row.projectContactId !== session.contactId) return new Response("Not found", { status: 404 });
   const contract = row.contract;
 
-  let signaturePhotoUrl: string | null = null;
-  if (contract.signaturePhotoPath) {
-    const supabase = createAdminClient();
-    const { data } = await supabase.storage.from("contracts").createSignedUrl(contract.signaturePhotoPath, 300);
-    signaturePhotoUrl = data?.signedUrl ?? null;
+  const supabase = createAdminClient();
+  async function signedUrlFor(path: string | null): Promise<string | null> {
+    if (!path) return null;
+    const { data } = await supabase.storage.from("contracts").createSignedUrl(path, 300);
+    return data?.signedUrl ?? null;
   }
+  const [signaturePhotoUrl, signatureDrawingUrl, staffSignatureDrawingUrl] = await Promise.all([
+    signedUrlFor(contract.signaturePhotoPath),
+    signedUrlFor(contract.signatureDrawingPath),
+    signedUrlFor(contract.staffSignatureDrawingPath),
+  ]);
 
   const element = React.createElement(ContractPdf, {
     data: {
@@ -57,8 +62,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orgSlug: st
       signedByName: contract.signedByName,
       signatureMethod: contract.signatureMethod,
       signaturePhotoUrl,
+      signatureDrawingUrl,
       staffSignedAt: contract.staffSignedAt,
       staffSignedByName: contract.staffSignedByName,
+      staffSignatureDrawingUrl,
     },
   });
 

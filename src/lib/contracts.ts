@@ -15,12 +15,13 @@ import type { ContractStatus } from "@/lib/contract-status";
 const BUCKET = "contracts";
 
 /**
- * Uploads a photo of the printed, signed contract to private storage — same
- * real-world pattern as damage-report photos, not a canvas e-signature pad
- * (nothing like that exists in this codebase, and a photo of a wet-ink
- * signature is what clients actually hand back today).
+ * Uploads either a photo of the printed, signed contract (wet-ink) or a
+ * drawn signature-pad PNG to the same private storage bucket — exported so
+ * the client-portal side (a separate "use server" file that can't call a
+ * private function here) can reuse it too, instead of duplicating the
+ * upload logic.
  */
-async function uploadContractSignature(orgId: number, base64Image: string, mimeType: string): Promise<string> {
+export async function uploadContractSignatureImage(orgId: number, base64Image: string, mimeType: string): Promise<string> {
   if (!mimeType.startsWith("image/")) throw new Error("Only image files are supported");
   const bytes = Buffer.from(base64Image, "base64");
   if (bytes.length > 8 * 1024 * 1024) throw new Error("Photo is too large (max 8MB)");
@@ -84,8 +85,10 @@ export async function getContractForPdf(id: number) {
         signedByName: contracts.signedByName,
         signatureMethod: contracts.signatureMethod,
         signaturePhotoPath: contracts.signaturePhotoPath,
+        signatureDrawingPath: contracts.signatureDrawingPath,
         staffSignedAt: contracts.staffSignedAt,
         staffSignedByName: contracts.staffSignedByName,
+        staffSignatureDrawingPath: contracts.staffSignatureDrawingPath,
         createdAt: contracts.createdAt,
         projectName: projects.name,
         clientName: contacts.displayName,
@@ -187,7 +190,7 @@ export async function signContractAction(params: {
       if (!params.signedByName?.trim()) throw new Error("Enter who signed");
       if (!params.base64Image) throw new Error("A photo of the signed contract is required");
 
-      const photoPath = await uploadContractSignature(orgId, params.base64Image, params.mimeType);
+      const photoPath = await uploadContractSignatureImage(orgId, params.base64Image, params.mimeType);
       const access = await getAccess();
 
       await db.update(contracts).set({
@@ -210,11 +213,11 @@ export async function signContractAction(params: {
   }
 }
 
-/** The staff/company countersignature — a second, independent typed-name
+/** The staff/company countersignature — a second, independent drawn
  *  signature from the client's own. Whichever side signs second is what
  *  actually flips status to "signed" (fully executed); the other stays
  *  wherever it already was, so signing order doesn't matter. */
-export async function staffSignContractAction(id: number, typedName: string): Promise<{ success: true } | { error: string }> {
+export async function staffSignContractAction(id: number, typedName: string, base64Signature: string, mimeType: string): Promise<{ success: true } | { error: string }> {
   try {
     await requirePerm("contracts");
     return await withOrg(async () => {
@@ -226,7 +229,9 @@ export async function staffSignContractAction(id: number, typedName: string): Pr
       if (row.staffSignedAt) throw new Error("Already countersigned");
       const clean = typedName?.trim();
       if (!clean) throw new Error("Type your name to sign");
+      if (!base64Signature) throw new Error("Draw your signature to sign");
 
+      const drawingPath = await uploadContractSignatureImage(orgId, base64Signature, mimeType);
       const access = await getAccess();
       const fullySigned = !!row.signedAt;
 
@@ -234,6 +239,7 @@ export async function staffSignContractAction(id: number, typedName: string): Pr
         staffSignedAt: nowISO(),
         staffSignedByName: clean,
         staffSignedByMemberId: access?.memberId ?? null,
+        staffSignatureDrawingPath: drawingPath,
         ...(fullySigned ? { status: "signed" } : {}),
       }).where(eq(contracts.id, id));
 

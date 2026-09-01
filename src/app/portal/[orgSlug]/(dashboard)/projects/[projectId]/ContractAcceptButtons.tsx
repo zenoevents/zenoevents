@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { portalAcceptContractAction, portalDeclineContractAction, portalSignContractAction } from "@/lib/client-portal/contracts";
+import { SignaturePad } from "@/components/SignaturePad";
 
 export function ContractAcceptButtons({ orgSlug, contractId, suggestedName }: { orgSlug: string; contractId: number; suggestedName: string }) {
   const router = useRouter();
@@ -10,6 +11,7 @@ export function ContractAcceptButtons({ orgSlug, contractId, suggestedName }: { 
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [typedName, setTypedName] = useState(suggestedName);
+  const [signature, setSignature] = useState<{ base64: string; mimeType: string } | null>(null);
 
   function accept() {
     setError(null);
@@ -23,8 +25,9 @@ export function ContractAcceptButtons({ orgSlug, contractId, suggestedName }: { 
   function sign() {
     setError(null);
     if (!typedName.trim()) { setError("Type your full name to sign"); return; }
+    if (!signature) { setError("Draw your signature to sign"); return; }
     start(async () => {
-      const res = await portalSignContractAction(orgSlug, contractId, typedName);
+      const res = await portalSignContractAction(orgSlug, contractId, typedName, signature.base64, signature.mimeType);
       if ("error" in res) setError(res.error);
       else router.refresh();
     });
@@ -43,13 +46,13 @@ export function ContractAcceptButtons({ orgSlug, contractId, suggestedName }: { 
   if (accepted) {
     return (
       <div className="mt-2 rounded-lg border border-dashed border-[var(--color-ink-200)] p-3 space-y-2">
-        <div className="text-[11.5px] text-[var(--color-ink-500)]">You've agreed to the terms above. Type your full name below to sign.</div>
+        <div className="text-[11.5px] text-[var(--color-ink-500)]">You've agreed to the terms above. Draw your signature and confirm your name below.</div>
+        <SignaturePad onChange={setSignature} />
         <input
           value={typedName}
           onChange={(e) => setTypedName(e.target.value)}
           placeholder="Your full name"
-          className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[15px] italic outline-none focus:border-[var(--color-accent-500)]"
-          style={{ fontFamily: "cursive" }}
+          className="w-full rounded-lg border border-[var(--color-ink-200)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent-500)]"
         />
         {error && <div className="text-[11.5px] text-[var(--color-bad)]">{error}</div>}
         <div className="flex gap-2">

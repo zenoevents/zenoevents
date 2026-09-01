@@ -1273,3 +1273,9 @@ WHERE o.contract_template IS NOT NULL AND TRIM(o.contract_template) != ''
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS staff_signed_at TEXT;
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS staff_signed_by_name TEXT;
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS staff_signed_by_member_id INTEGER;
+
+-- Actual drawn (finger/mouse) signatures on a signature pad, instead of a
+-- cursive rendering of a typed name — one image per party, same private
+-- "contracts" storage bucket the wet-ink photo already uses.
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS signature_drawing_path TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS staff_signature_drawing_path TEXT;
