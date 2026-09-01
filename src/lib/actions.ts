@@ -1038,6 +1038,7 @@ async function _convertQuoteToInvoiceInner(quote: typeof documents.$inferSelect,
       customColumnValue: l.customColumnValue,
       costCenterId: l.costCenterId,
       warehouseId: l.warehouseId,
+      isHeading: l.isHeading,
     })),
   });
   await db
