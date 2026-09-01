@@ -4,6 +4,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui";
 import { ClientDocuments } from "./ClientDocuments";
+import { DocumentsSummary } from "./DocumentsSummary";
 import { StatementTab } from "@/components/StatementTab";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +69,12 @@ export default async function ClientPortalDocuments({
         {tab === "statement" ? (
           <StatementTab contact={{ id: session.contactId, displayName: "You" } as any} docs={allDocs} pays={allPayments} portalSlug={orgSlug} />
         ) : (
-          <ClientDocuments slug={orgSlug} tab={tab} documents={viewDocs} payments={allPayments} />
+          <>
+            {(tab === "invoices" || tab === "quotes") && (
+              <DocumentsSummary type={tab === "quotes" ? "quote" : "invoice"} docs={viewDocs} />
+            )}
+            <ClientDocuments slug={orgSlug} tab={tab} documents={viewDocs} payments={allPayments} />
+          </>
         )}
       </div>
     </>
