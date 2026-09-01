@@ -1050,6 +1050,15 @@ async function _convertQuoteToInvoiceInner(quote: typeof documents.$inferSelect,
   // convertible, so a second click (or a retried request) could claim it
   // again and generate a second, independent invoice from the same quote.
   await db.update(documents).set({ status: "converted" }).where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, quote.id)));
+
+  // Converting to invoice is itself a real "this booking is happening"
+  // signal — the invoice it produces stays draft/unissued (a human reviews
+  // it first), so neither the invoice-issued nor quote-accepted triggers
+  // fire on their own here if the quote was converted straight from "open"
+  // without ever being explicitly marked Accepted.
+  if (quote.projectId) {
+    await advanceProjectStatus(currentOrgId(), quote.projectId, "confirmed", "quote converted to invoice");
+  }
   return invoiceId;
 }
 
