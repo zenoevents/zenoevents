@@ -9,6 +9,7 @@ import { nowISO } from "@/lib/money";
 import { logAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { LINE_TRANSITIONS, type LineStatus } from "@/lib/manifest-status";
+import { maybeCompleteProject } from "@/lib/project-status-advance";
 
 /** Roles that can act as admin/ops for manifest purposes — everyone else
  *  is restricted to the transitions LINE_TRANSITIONS grants their role. */
@@ -251,6 +252,7 @@ export async function reconcileManifestAction(manifestId: number): Promise<{ suc
 
       await db.update(manifests).set({ status: "reconciled", reconciledAt: nowISO() }).where(eq(manifests.id, manifestId));
       await logAudit({ action: "manifest.reconcile", module: "projects", recordId: manifestId, projectId: manifest.projectId });
+      await maybeCompleteProject(orgId, manifest.projectId, "manifest reconciled");
       revalidatePath(`/projects/${manifest.projectId}/manifest`);
       return { success: true };
     });

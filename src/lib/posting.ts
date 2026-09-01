@@ -16,7 +16,7 @@ import { currentOrgId } from "@/lib/org";
 import { SYS } from "./coa";
 import { addLot, consumeFifo, consumeForSale, restoreSaleConsumption, checkStockAvailability, type BomComponentConsumption } from "./inventory";
 import { nowISO } from "./money";
-import { advanceProjectStatus } from "./project-status-advance";
+import { maybeCompleteProject } from "./project-status-advance";
 
 /**
  * The posting engine — the ONLY writer to journal_entries / journal_lines.
@@ -271,7 +271,7 @@ export async function postCreditNote(docId: number): Promise<number> {
         await db.update(documents).set({ status }).where(and(eq(documents.orgId, currentOrgId()), eq(documents.id, inv.id)));
       }
       if (status === "paid" && inv.status !== "paid" && inv.projectId) {
-        await advanceProjectStatus(currentOrgId(), inv.projectId, "completed", "invoice paid in full");
+        await maybeCompleteProject(currentOrgId(), inv.projectId, "invoice paid in full");
       }
     }
   }
@@ -575,7 +575,7 @@ export async function postPayment(paymentId: number): Promise<number> {
       // sent/accepted already does. Forward-only, so an earlier invoice
       // paying off after the project is already completed is a no-op.
       if (status === "paid" && doc.type === "invoice" && doc.projectId) {
-        await advanceProjectStatus(currentOrgId(), doc.projectId, "completed", "invoice paid in full");
+        await maybeCompleteProject(currentOrgId(), doc.projectId, "invoice paid in full");
       }
     }
   }
