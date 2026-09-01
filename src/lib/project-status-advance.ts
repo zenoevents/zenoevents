@@ -30,6 +30,12 @@ async function hasReservationConflict(orgId: number, inventoryItemId: number, st
  * project's booking. Anything ambiguous, short, or conflicting is skipped
  * silently — staff sorts it out manually via the Reserve Inventory panel;
  * this never blocks the project from confirming.
+ *
+ * Includes draft invoices, not just issued ones — a quote converted to
+ * invoice is deliberately left as an unissued draft for staff to review
+ * (see the "quote converted to invoice" trigger), but its line items are
+ * still real committed content the moment the project is confirmed, not
+ * hypothetical. Only "void" is excluded.
  */
 async function autoBookReservationsFromInvoices(orgId: number, projectId: number): Promise<number> {
   const [project] = await db.select({ eventDate: projects.eventDate }).from(projects)
@@ -43,7 +49,7 @@ async function autoBookReservationsFromInvoices(orgId: number, projectId: number
       eq(documents.orgId, orgId),
       eq(documents.projectId, projectId),
       eq(documents.type, "invoice"),
-      notInArray(documents.status, ["draft", "void"]),
+      ne(documents.status, "void"),
     ));
 
   const qtyByItem = new Map<number, number>();
@@ -119,7 +125,6 @@ export async function advanceProjectStatus(orgId: number, projectId: number, tar
   await db.update(projects).set({ status: target }).where(eq(projects.id, projectId));
 
   let promotedCount = 0;
-  let autoBookedCount = 0;
   if (target === "confirmed") {
     const quoted = await db.select({ id: reservations.id, inventoryItemId: reservations.inventoryItemId })
       .from(reservations)
@@ -135,23 +140,51 @@ export async function advanceProjectStatus(orgId: number, projectId: number, tar
       ));
       promotedCount = quoted.length;
     }
-    autoBookedCount = await autoBookReservationsFromInvoices(orgId, projectId);
   }
 
-  const notes = [
-    promotedCount > 0 ? `+${promotedCount} reservations booked` : null,
-    autoBookedCount > 0 ? `+${autoBookedCount} items auto-booked from invoice` : null,
-  ].filter(Boolean);
   await logAudit({
     action: "project.status",
     module: "projects",
     recordId: projectId,
-    detail: notes.length > 0 ? `${target} (auto: ${reason}, ${notes.join(", ")})` : `${target} (auto: ${reason})`,
+    detail: promotedCount > 0 ? `${target} (auto: ${reason}, +${promotedCount} reservations booked)` : `${target} (auto: ${reason})`,
     projectId,
   });
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects/inventory");
+
+  // Auto-booking runs on every call, not just the one that flips the
+  // status — advanceProjectStatus() no-ops for a project already at/past
+  // "confirmed", so a second invoice (or an edit adding lines to an
+  // existing one) needs its own pass to pick up newly-added items.
+  await maybeAutoBookProjectItems(orgId, projectId);
+}
+
+/**
+ * Runs the invoice-item auto-book pass for a project that's already firm
+ * (confirmed/in_progress/completed) — safe to call after every invoice
+ * save/issue/edit for a project, whether or not that particular call is
+ * what confirmed it. Silently does nothing for a project that isn't firm
+ * yet (booking before confirmation would be premature — that's what the
+ * separate "quoted" reservation status is for).
+ */
+export async function maybeAutoBookProjectItems(orgId: number, projectId: number) {
+  const [row] = await db.select({ status: projects.status }).from(projects)
+    .where(and(eq(projects.orgId, orgId), eq(projects.id, projectId))).limit(1);
+  if (!row || !["confirmed", "in_progress", "completed"].includes(row.status)) return;
+
+  const bookedCount = await autoBookReservationsFromInvoices(orgId, projectId);
+  if (bookedCount > 0) {
+    await logAudit({
+      action: "project.status",
+      module: "projects",
+      recordId: projectId,
+      detail: `+${bookedCount} items auto-booked from invoice`,
+      projectId,
+    });
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/projects/inventory");
+  }
 }
 
 /**

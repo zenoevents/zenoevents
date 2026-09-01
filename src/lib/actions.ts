@@ -65,7 +65,7 @@ function revalidatePath(path: string, type?: "page" | "layout") {
 
 import { getOrg } from "@/lib/org";
 import { notifyOrg } from "@/lib/notifications";
-import { advanceProjectStatus } from "@/lib/project-status-advance";
+import { advanceProjectStatus, maybeAutoBookProjectItems } from "@/lib/project-status-advance";
 import { logAudit } from "./audit";
 import { buildBalanceAdjustmentLines } from "./account-balance-adjustments";
 import {
@@ -859,6 +859,10 @@ async function _saveDocument(data: {
   if (repostInvoiceId) {
     // postInvoice sets status back to "open" itself once the fresh entry posts.
     await postInvoice(repostInvoiceId);
+    // Editing an issued invoice's lines never goes through _issueClaimedDocument
+    // (that's only the original issuance) — the project might already be
+    // confirmed with new items just added, so run the auto-book pass here too.
+    if (data.projectId) await maybeAutoBookProjectItems(currentOrgId(), data.projectId);
   }
 
   revalidatePath("/sales");
