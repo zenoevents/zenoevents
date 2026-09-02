@@ -199,7 +199,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     keyConcepts: [
       "Lifecycle: Lead → Quoted → Confirmed → In Progress → Completed (or Cancelled at any point). Most of these transitions happen automatically as you work — see \"The Big Picture\" for exactly which actions trigger which move.",
       "The project page is organized into tabs: Overview, Quotes, Invoices, Expenses, Reservations, Payment Schedule, Damage Reports, Contracts, Files, Notes, Tasks, Milestones, and Audit Log — everything about this one event, in one place.",
-      "Overview shows a lifecycle stepper, a budget-vs-invoiced-vs-collected comparison, a payment-milestone timeline, manifest pick-readiness, a cost breakdown, and a damage-report flag if one exists — the whole health of the event at a glance.",
+      "Overview shows a lifecycle stepper, a budget-vs-invoiced-vs-collected comparison, a payment-milestone timeline, manifest pick-readiness, a cost breakdown, a damage-report flag if one exists, and an amber banner listing any invoiced Event Inventory items that still need a manual reservation — the whole health of the event at a glance.",
       "A Payment Schedule can split the total into milestones (e.g. 50% deposit, 30% before the event, 20% on completion) — each milestone generates its own real invoice when it comes due, automatically pulling in any billable expenses tagged to the project that haven't been invoiced yet.",
       "Quotes and invoices created from within a project auto-pick that project's client — no need to search for the contact again.",
     ],
@@ -262,6 +262,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "A Reservation ties one batch to one project across a date range. Reservations made before a project is confirmed are provisional (\"quoted\") and don't lock the item; confirming the project promotes them to firm bookings automatically.",
       "Reservations are also auto-created from invoice content: once a project is confirmed, any invoice line item that maps to exactly one unambiguous batch, with enough free quantity and no date conflict, gets reserved automatically. Anything ambiguous is left for a human to sort out — it never silently guesses.",
       "This auto-booking re-runs on every invoice save, issue, or edit for an already-confirmed project — not just the one moment it first confirms — so adding more items later still gets picked up.",
+      "A skipped item doesn't just disappear — the project's Overview tab flags it with an amber \"needs a manual reservation\" banner, listing exactly which items and quantities, with a link straight to the Reservations tab. Clearing it just means picking a batch there.",
       "A conflict check blocks double-booking the same batch across overlapping dates, with a clear override available for an admin who genuinely needs to book anyway.",
     ],
     note: "Event Inventory items can be created inline, right from this screen, without a detour through Items & Stock first — useful the first time a brand-new piece of rental gear enters the catalog.",
