@@ -21,7 +21,8 @@ export interface GuideSection {
   steps?: GuideStep[];
   note?: string; // a highlighted callout — edge case, permission gate, warning
   crossRefs?: string[]; // section numbers
-  screenshotCaption?: string; // what a screenshot of this screen would show
+  screenshotCaption?: string; // caption shown under the screenshot (or, if no screenshot file, what one would show)
+  screenshot?: string; // filename in public/docs/screenshots/ — regenerate via scripts/capture-screenshots.ts
 }
 
 export const GUIDE_META = {
@@ -138,6 +139,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       { title: "Use the calendar to spot conflicts", detail: "A day with a heavy tint has multiple things happening — worth a second look before confirming anything new for that date." },
     ],
     crossRefs: ["08", "13"],
+    screenshot: "dashboard.png",
+    screenshotCaption: "Home dashboard — this week's events, cash position, and the manifest pipeline.",
   },
   {
     number: "05",
@@ -158,6 +161,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       { title: "Convert when it's real", detail: "Hit \"Convert to Project\" once a lead is a genuine booking — this creates the Contact and Project together, pre-filled from what the lead already captured." },
     ],
     crossRefs: ["08"],
+    screenshot: "leads.png",
+    screenshotCaption: "The leads board — every channel feeding one shared pipeline.",
   },
   {
     number: "06",
@@ -206,6 +211,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       { title: "Close it out", detail: "Once every invoice is paid in full and the manifest is reconciled, the project auto-completes." },
     ],
     crossRefs: ["02", "05", "09", "10", "11", "13", "14"],
+    screenshot: "projects-overview.png",
     screenshotCaption: "Project Overview tab — lifecycle stepper, financial bars, payment timeline, manifest readiness.",
   },
   {
@@ -223,6 +229,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Quote Templates save a reusable starting point (line items, notes, terms) so a common package doesn't have to be rebuilt from scratch every time.",
     ],
     crossRefs: ["08", "10"],
+    screenshot: "quotes-list.png",
+    screenshotCaption: "The Quotes list — every quote, its status, and its total.",
   },
   {
     number: "10",
@@ -238,6 +246,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Payments Received lists every payment against every invoice; Credit Notes handles partial or full reversals, either freehand or copied wholesale from an existing invoice.",
     ],
     crossRefs: ["02", "08", "16"],
+    screenshot: "invoices-list.png",
+    screenshotCaption: "The Invoices list — status, balance due, and payment state at a glance.",
   },
   {
     number: "11",
@@ -256,6 +266,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     ],
     note: "Event Inventory items can be created inline, right from this screen, without a detour through Items & Stock first — useful the first time a brand-new piece of rental gear enters the catalog.",
     crossRefs: ["08", "12", "13"],
+    screenshot: "event-inventory.png",
     screenshotCaption: "Event Inventory list — batches, warehouse locations, and live reservation status.",
   },
   {
@@ -272,6 +283,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Items and Event Inventory share the same underlying catalog row — an item with rental batches shows a small badge linking straight across to its Event Inventory presence.",
     ],
     crossRefs: ["11"],
+    screenshot: "items-stock.png",
+    screenshotCaption: "Items & Stock — the general catalog, stock levels, and reorder points.",
   },
   {
     number: "13",
@@ -295,6 +308,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       { title: "Reconcile", detail: "Once every durable line has an inspected outcome, an admin reconciles the manifest — this is the point of no return for that job." },
     ],
     crossRefs: ["08", "11"],
+    screenshot: "manifest.png",
     screenshotCaption: "Manifest checklist — one line per durable item, with its current pick/load/dispatch status.",
   },
   {
@@ -315,7 +329,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     ],
     note: "A contract's PDF renders both signature blocks side by side — client and company — each showing the real drawn mark, the signer's name, and the exact date and time signed.",
     crossRefs: ["08", "21"],
-    screenshotCaption: "Contract signature section — client and company signature boxes side by side.",
+    screenshot: "contracts.png",
+    screenshotCaption: "A project's Contracts tab — status, type, and both signatures once fully executed.",
   },
   {
     number: "15",
@@ -356,6 +371,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Reports are the compliance layer — what you'd hand to an accountant or file with iTax.",
       "Analytics is the decision-making layer — which event types are actually profitable, when the busy season really is, whether damage rates or repeat-client rates are trending in the right direction.",
     ],
+    screenshot: "analytics.png",
+    screenshotCaption: "Analytics — margin by event type, seasonal trends, and the booking-to-billing funnel.",
   },
   {
     number: "18",
@@ -377,6 +394,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "The permission matrix on this page is the literal source of truth for every sidebar item everyone in the org sees. Section 03 (\"Roles & What Each One Sees\") documents the defaults; this is where they're changed.",
     ],
     crossRefs: ["03"],
+    screenshot: "staff-roles.png",
+    screenshotCaption: "Staff & Roles — staff accounts and the per-role permission matrix.",
   },
   {
     number: "20",
@@ -393,6 +412,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "Contract Types & Templates is where the admin-managed contract vocabulary from Section 14 actually lives.",
     ],
     crossRefs: ["14", "19"],
+    screenshot: "settings.png",
+    screenshotCaption: "Settings — org profile, billing, gateways, and every other org-wide configuration screen.",
   },
   {
     number: "21",
@@ -410,6 +431,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     ],
     note: "This is a genuinely separate app from the one described in the rest of this guide. If a client ever asks you something about \"the system\", double-check whether they mean their portal or your staff app — the two look and behave differently on purpose.",
     crossRefs: ["08", "09", "10", "14"],
+    screenshot: "client-portal-project.png",
     screenshotCaption: "Client Portal project view — lifecycle progress, documents, and contracts, from the client's side.",
   },
   {

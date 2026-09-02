@@ -2,9 +2,12 @@
    same content module the in-app /docs/guide page renders.
    Run: npx tsx scripts/generate-guide-pdf.tsx */
 import React from "react";
-import { Document, Page, Text, View, StyleSheet, renderToFile } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, renderToFile } from "@react-pdf/renderer";
 import { GUIDE_META, GUIDE_SECTIONS as RAW_SECTIONS, ROLE_MATRIX, ROLE_LABELS, type GuideSection } from "../src/content/guide";
 import path from "path";
+import fs from "fs";
+
+const SCREENSHOTS_DIR = path.join(process.cwd(), "public", "docs", "screenshots");
 
 /** Helvetica (react-pdf's base14 font, no embedding needed) only supports
  *  WinAnsiEncoding — "→" isn't in it and silently renders as a stray glyph.
@@ -86,6 +89,10 @@ const s = StyleSheet.create({
   previewEyebrow: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: FAINT, textTransform: "uppercase", letterSpacing: 0.6 },
   previewText: { fontSize: 9.5, color: "#3a3a3c", marginTop: 2 },
 
+  screenshotWrap: { marginTop: 12, marginBottom: 4 },
+  screenshotImg: { width: "100%", maxHeight: 230, objectFit: "cover", objectPosition: "top", borderRadius: 6, borderWidth: 1, borderColor: HAIRLINE },
+  screenshotCaption: { fontSize: 8.3, color: MUTED, marginTop: 5 },
+
   blockLabel: { fontSize: 8, fontFamily: "Helvetica-Bold", color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 14, marginBottom: 6 },
   bullet: { flexDirection: "row", marginBottom: 4 },
   bulletMark: { width: 10, fontSize: 9.5, color: FAINT },
@@ -136,14 +143,21 @@ function SectionBlock({ section }: { section: GuideSection }) {
       <Text style={s.summary}>{section.summary}</Text>
       <Text style={s.rolesLine}><Text style={s.rolesLineLabel}>Roles  </Text>{section.roles.join("   ·   ")}</Text>
 
-      {section.screenshotCaption && (
-        <View style={s.previewBox}>
-          <View style={s.previewIcon} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.previewEyebrow}>Preview this screen live in the app</Text>
-            <Text style={s.previewText}>{section.screenshotCaption}</Text>
-          </View>
+      {section.screenshot && fs.existsSync(path.join(SCREENSHOTS_DIR, section.screenshot)) ? (
+        <View style={s.screenshotWrap} wrap={false}>
+          <Image src={path.join(SCREENSHOTS_DIR, section.screenshot)} style={s.screenshotImg} />
+          {section.screenshotCaption && <Text style={s.screenshotCaption}>{section.screenshotCaption}</Text>}
         </View>
+      ) : (
+        section.screenshotCaption && (
+          <View style={s.previewBox}>
+            <View style={s.previewIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.previewEyebrow}>Preview this screen live in the app</Text>
+              <Text style={s.previewText}>{section.screenshotCaption}</Text>
+            </View>
+          </View>
+        )
       )}
 
       {section.keyConcepts && section.keyConcepts.length > 0 && (

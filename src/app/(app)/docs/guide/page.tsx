@@ -108,14 +108,28 @@ export default function GuidePage() {
               {s.roles.join(" · ")}
             </div>
 
-            {s.screenshotCaption && (
-              <div className="mt-4 rounded-xl border border-dashed border-[var(--color-ink-200)] bg-[var(--color-ink-50)]/60 px-5 py-6 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-white border border-[var(--color-ink-200)] flex items-center justify-center text-[16px] shrink-0">🖥️</div>
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-ink-400)]">Preview this screen live</div>
-                  <div className="text-[13px] text-[var(--color-ink-600)] mt-0.5">{s.screenshotCaption}</div>
+            {s.screenshot ? (
+              <figure className="mt-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/docs/screenshots/${s.screenshot}`}
+                  alt={s.screenshotCaption || s.title}
+                  className="w-full rounded-xl border border-[var(--color-ink-100)] shadow-[var(--shadow-card)]"
+                />
+                {s.screenshotCaption && (
+                  <figcaption className="text-[11.5px] text-[var(--color-ink-400)] mt-2">{s.screenshotCaption}</figcaption>
+                )}
+              </figure>
+            ) : (
+              s.screenshotCaption && (
+                <div className="mt-4 rounded-xl border border-dashed border-[var(--color-ink-200)] bg-[var(--color-ink-50)]/60 px-5 py-6 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-[var(--color-ink-200)] flex items-center justify-center text-[16px] shrink-0">🖥️</div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-ink-400)]">Preview this screen live</div>
+                    <div className="text-[13px] text-[var(--color-ink-600)] mt-0.5">{s.screenshotCaption}</div>
+                  </div>
                 </div>
-              </div>
+              )
             )}
 
             {s.keyConcepts && s.keyConcepts.length > 0 && (
