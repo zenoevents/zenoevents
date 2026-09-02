@@ -17,6 +17,7 @@ const groups: {
       { href: "/announcements", label: "Announcements", icon: "📣", perm: "announcements" },
       { href: "/time-tracking", label: "Time Tracking", icon: "⏱️", perm: "dashboard" },
       { href: "/leave-requests", label: "Leave Requests", icon: "🌴", perm: "leave_requests" },
+      { href: "/docs/guide", label: "Documentation", icon: "📖", perm: "dashboard" },
     ],
   },
   {
