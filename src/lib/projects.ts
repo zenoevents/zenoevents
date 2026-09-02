@@ -1,6 +1,6 @@
 "use server";
 
-import { db, projects, documents, contacts, paymentSchedule, reservations, inventoryItems, items, contracts } from "@/db";
+import { db, projects, documents, documentLines, contacts, paymentSchedule, reservations, inventoryItems, items, contracts } from "@/db";
 import { eq, and, inArray, sql, ne } from "drizzle-orm";
 import { withOrg, currentOrgId } from "@/lib/org";
 import { requirePerm } from "@/lib/guard";
@@ -377,6 +377,8 @@ export async function getProjectOverviewStats(projectId: number) {
       .from(damageReports)
       .where(and(eq(damageReports.orgId, orgId), eq(damageReports.projectId, projectId), eq(damageReports.billedToClient, false)));
 
+    const unreservedInventoryItems = await getUnreservedInvoiceItems(orgId, projectId);
+
     return {
       stage,
       cancelled: proj?.status === "cancelled",
@@ -385,6 +387,59 @@ export async function getProjectOverviewStats(projectId: number) {
       totalDurable: durableLines.length,
       manifestLines: durableLines,
       damageWriteoffCents: Number(damageWriteoff?.total ?? 0),
+      unreservedInventoryItems,
     };
   });
+}
+
+/**
+ * Event Inventory items on this project's real invoices that still have no
+ * active reservation against any of their batches — the ones auto-booking
+ * (project-status-advance.ts) deliberately skipped because the item split
+ * across multiple batches, ran short on quantity, or hit a date conflict.
+ * Surfaced on Overview so staff don't discover it's unbooked on event day.
+ */
+async function getUnreservedInvoiceItems(orgId: number, projectId: number): Promise<{ itemId: number; name: string; qty: number }[]> {
+  const lines = await db.select({ itemId: documentLines.itemId, qty: documentLines.qty })
+    .from(documentLines)
+    .innerJoin(documents, eq(documents.id, documentLines.documentId))
+    .where(and(
+      eq(documents.orgId, orgId),
+      eq(documents.projectId, projectId),
+      eq(documents.type, "invoice"),
+      ne(documents.status, "void"),
+    ));
+
+  const qtyByItem = new Map<number, number>();
+  for (const l of lines) {
+    if (!l.itemId) continue;
+    qtyByItem.set(l.itemId, (qtyByItem.get(l.itemId) ?? 0) + l.qty);
+  }
+  if (qtyByItem.size === 0) return [];
+
+  const batches = await db.select({ id: inventoryItems.id, itemId: inventoryItems.itemId })
+    .from(inventoryItems)
+    .where(and(eq(inventoryItems.orgId, orgId), inArray(inventoryItems.itemId, [...qtyByItem.keys()])));
+  const batchIdsByItem = new Map<number, number[]>();
+  for (const b of batches) {
+    const arr = batchIdsByItem.get(b.itemId) ?? [];
+    arr.push(b.id);
+    batchIdsByItem.set(b.itemId, arr);
+  }
+  if (batchIdsByItem.size === 0) return []; // none of these items are Event Inventory at all
+
+  const activeReservations = await db.select({ inventoryItemId: reservations.inventoryItemId }).from(reservations)
+    .where(and(eq(reservations.orgId, orgId), eq(reservations.projectId, projectId), ne(reservations.status, "cancelled")));
+  const reservedBatchIds = new Set(activeReservations.map((r) => r.inventoryItemId));
+
+  const unresolved: { itemId: number; name: string; qty: number }[] = [];
+  for (const [itemId, qty] of qtyByItem) {
+    const itemBatchIds = batchIdsByItem.get(itemId);
+    if (!itemBatchIds) continue; // not an Event Inventory item — nothing to reserve
+    const hasReservation = itemBatchIds.some((id) => reservedBatchIds.has(id));
+    if (hasReservation) continue;
+    const [item] = await db.select({ name: items.name }).from(items).where(eq(items.id, itemId)).limit(1);
+    unresolved.push({ itemId, name: item?.name ?? "Item", qty });
+  }
+  return unresolved;
 }

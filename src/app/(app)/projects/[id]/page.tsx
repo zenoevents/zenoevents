@@ -24,6 +24,7 @@ import { PaymentTimeline } from "./overview/PaymentTimeline";
 import { ManifestReadiness } from "./overview/ManifestReadiness";
 import { CostBreakdown } from "./overview/CostBreakdown";
 import { DamageFlag } from "./overview/DamageFlag";
+import { UnreservedItemsFlag } from "./overview/UnreservedItemsFlag";
 import { ReserveInventoryPanel } from "./ReserveInventoryPanel";
 import { PaymentSchedulePanel } from "./PaymentSchedulePanel";
 import { DamageReportPanel } from "./DamageReportPanel";
@@ -222,6 +223,10 @@ export default async function ProjectDetailPage({
             )}
 
             <LifecycleStepper stage={overviewStats.stage} cancelled={overviewStats.cancelled} />
+
+            <div className="mt-4">
+              <UnreservedItemsFlag projectId={projectId} items={overviewStats.unreservedInventoryItems} />
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
               <FinancialBars
